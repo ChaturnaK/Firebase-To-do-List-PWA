@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta
+            http-equiv="Content-Security-Policy"
+            content="
+          default-src 'self';
+          script-src 'self' https://apis.google.com https://www.gstatic.com;
+          connect-src 'self' https://sheets.googleapis.com https://www.googleapis.com;
+          style-src 'self' 'unsafe-inline';
+          frame-src 'self' https://accounts.google.com https://content-sheets.googleapis.com;
+        "
+        />
+        <title>To-Do List with Google Sheets Integration</title>
+        <link rel="stylesheet" href="styles.css" />
+        <script src="https://apis.google.com/js/api.js"></script>
+    </head>
+    <body>
+        <!-- Modal for entering Google Sheet URL -->
+        <div id="sheet-link-modal" style="display: none">
+            <p>Please enter your Google Sheet link:</p>
+            <input
+                type="text"
+                id="sheet-link-input"
+                placeholder="Google Sheet URL"
+            />
+            <button id="save-sheet-link-btn">Save Link</button>
+        </div>
+
+        <!-- To-Do List Container -->
+        <div class="todo-container">
+            <h1>To-Do List</h1>
+            <div class="theme-toggle">
+                <button id="theme-toggle-btn">Switch to Dark Mode</button>
+            </div>
+            <div class="input-container">
+                <input
+                    type="text"
+                    id="new-task-input"
+                    placeholder="Add a new task..."
+                />
+                <div class="deadline-toggle">
+                    <label for="deadline-switch">Add a deadline</label>
+                    <input type="checkbox" id="deadline-switch" />
+                </div>
+                <input
+                    type="date"
+                    id="task-deadline"
+                    placeholder="Select deadline"
+                    style="display: none"
+                />
+                <button id="add-task-btn">Add Task</button>
+            </div>
+            <ul id="task-list"></ul>
+        </div>
+
+        <script src="script.js"></script>
+    </body>
+</html>
