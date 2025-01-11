@@ -3,16 +3,12 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta
-            http-equiv="Content-Security-Policy"
-            content="
-          default-src 'self';
-          script-src 'self' https://apis.google.com https://www.gstatic.com;
-          connect-src 'self' https://sheets.googleapis.com https://www.googleapis.com;
-          style-src 'self' 'unsafe-inline';
-          frame-src 'self' https://accounts.google.com https://content-sheets.googleapis.com;
-        "
-        />
+        <meta http-equiv="Content-Security-Policy" content="
+              default-src 'self'; 
+              script-src 'self' https://apis.google.com https://www.gstatic.com; 
+              connect-src 'self' https://www.googleapis.com https://accounts.google.com https://content-sheets.googleapis.com; 
+              frame-src 'self' https://accounts.google.com https://content-sheets.googleapis.com; 
+              style-src 'self' 'unsafe-inline';">
         <title>To-Do List with Google Sheets Integration</title>
         <link rel="stylesheet" href="styles.css" />
         <script src="https://apis.google.com/js/api.js"></script>
