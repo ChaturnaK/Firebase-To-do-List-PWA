@@ -238,3 +238,7 @@ function applyTheme() {
         themeToggleBtn.textContent = "Switch to Dark Mode";
     }
 }
+function handleCredentialResponse(response) {
+    console.log("Encoded JWT ID token: " + response.credential);
+    // Decode the JWT token and use it in your app
+}
