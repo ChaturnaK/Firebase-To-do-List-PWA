@@ -2,143 +2,231 @@
 <html lang="en">
     <head>
         <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta
-            http-equiv="Content-Security-Policy"
-            content="
-          default-src 'self';
-          script-src 'self' https://apis.google.com https://www.gstatic.com;
-          connect-src 'self' https://sheets.googleapis.com https://www.googleapis.com;
-          style-src 'self' 'unsafe-inline';
-          frame-src 'self' https://accounts.google.com https://content-sheets.googleapis.com;
-        "
-        />
-        <title>To-Do List with Google Sheets Integration</title>
-        <link rel="stylesheet" href="styles.css" />
-        <script src="https://apis.google.com/js/api.js"></script>
-    </head>
-    <body>
-        <!-- Modal for entering Google Sheet URL -->
-        <div id="sheet-link-modal" style="display: none">
-            <p>Please enter your Google Sheet link:</p>
-            <input
-                type="text"
-                id="sheet-link-input"
-                placeholder="Google Sheet URL"
-            />
-            <button id="save-sheet-link-btn">Save Link</button>
-        </div>
-
-        <!-- To-Do List Container -->
-        <div class="todo-container">
-            <h1>To-Do List</h1>
-            <div class="theme-toggle">
-                <button id="theme-toggle-btn">Switch to Dark Mode</button>
-            </div>
-            <div class="input-container">
-                <input
-                    type="text"
-                    id="new-task-input"
-                    placeholder="Add a new task..."
-                />
-                <div class="deadline-toggle">
-                    <label for="deadline-switch">Add a deadline</label>
-                    <input type="checkbox" id="deadline-switch" />
-                </div>
-                <input
-                    type="date"
-                    id="task-deadline"
-                    placeholder="Select deadline"
-                    style="display: none"
-                />
-                <button id="add-task-btn">Add Task</button>
-            </div>
-            <ul id="task-list"></ul>
-        </div>
-
-        <script src="script.js"></script>
-    </body>
-</html>
-<!doctype html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Google Identity Services Example</title>
+        <title>To-Do App</title>
 
-        <!-- Google Identity Services JavaScript -->
-        <script
-            src="https://accounts.google.com/gsi/client"
-            async
-            defer
-        ></script>
-
-        <!-- Content Security Policy -->
-        <meta
-            http-equiv="Content-Security-Policy"
-            content="
-    default-src 'self';
-    script-src 'self' https://accounts.google.com https://apis.google.com https://www.gstatic.com;
-    connect-src 'self' https://www.googleapis.com https://accounts.google.com https://content-sheets.googleapis.com;
-    frame-src 'self' https://accounts.google.com https://content-sheets.googleapis.com;
-    style-src 'self' 'unsafe-inline';"
+        <!-- Bootstrap CSS -->
+        <link
+            href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+            rel="stylesheet"
         />
 
-        <!-- Optional styling for the sign-in button -->
-        <style>
-            body {
-                font-family: Arial, sans-serif;
-                text-align: center;
-                margin: 0;
-                padding: 50px;
-            }
-            .g_id_signin {
-                margin-top: 20px;
-            }
-        </style>
+        <!-- Your custom CSS -->
+        <link rel="stylesheet" href="styles.css" />
+        <link rel="manifest" href="manifest.json" />
+
+        <!-- Firebase (compat libraries for example) -->
+        <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     </head>
     <body>
-        <h1>Google Sign-In with Identity Services</h1>
+        <!-- Navbar -->
+        <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+            <div class="container">
+                <a class="navbar-brand" href="#">To-Do App</a>
+                <button
+                    id="theme-toggle-btn"
+                    class="btn btn-outline-light ms-auto"
+                    aria-label="Switch theme mode"
+                >
+                    Dark Mode
+                </button>
+            </div>
+        </nav>
 
-        <!-- Google Sign-In Button -->
+        <!-- Feedback Alerts -->
+        <div class="container mt-3" id="feedback-container"></div>
+
+        <!-- Loading Spinner -->
+        <div id="loading-spinner" class="d-none text-center my-3">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p>Loading...</p>
+        </div>
+
+        <!-- Authentication Section -->
+        <div class="container mt-5" id="auth-section">
+            <div class="row justify-content-center">
+                <div class="col-md-6">
+                    <h2 class="text-center mb-4">Sign In or Sign Up</h2>
+                    <div class="mb-3">
+                        <input
+                            type="email"
+                            id="email-input"
+                            class="form-control"
+                            placeholder="Email"
+                            aria-label="Email address"
+                        />
+                    </div>
+                    <div class="mb-3">
+                        <input
+                            type="password"
+                            id="password-input"
+                            class="form-control"
+                            placeholder="Password"
+                            aria-label="Password"
+                        />
+                    </div>
+                    <div class="d-flex justify-content-center">
+                        <button id="sign-in-btn" class="btn btn-primary me-2">
+                            Sign In
+                        </button>
+                        <button id="sign-up-btn" class="btn btn-secondary">
+                            Sign Up
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- To-Do Section -->
+        <div class="container mt-5 d-none" id="todo-section">
+            <!-- Section Heading & Buttons -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>Your Tasks</h2>
+                <div>
+                    <button
+                        type="button"
+                        class="btn btn-success"
+                        data-bs-toggle="modal"
+                        data-bs-target="#addTaskModal"
+                    >
+                        Add New Task
+                    </button>
+                    <button
+                        id="sign-out-btn"
+                        class="btn btn-outline-danger ms-2"
+                        aria-label="Sign out"
+                    >
+                        Sign Out
+                    </button>
+                </div>
+            </div>
+
+            <!-- Progress Bar for Completed vs. Total Tasks -->
+            <div class="mb-4">
+                <label class="fw-bold mb-1">Progress:</label>
+                <div class="progress">
+                    <div
+                        id="task-progress-bar"
+                        class="progress-bar"
+                        role="progressbar"
+                        style="width: 0%"
+                        aria-valuenow="0"
+                        aria-valuemin="0"
+                        aria-valuemax="100"
+                    >
+                        0%
+                    </div>
+                </div>
+            </div>
+
+            <!-- Task List (grouped by date) -->
+            <ul class="list-group" id="task-list">
+                <!-- Date headings and tasks will be inserted dynamically here -->
+            </ul>
+        </div>
+
+        <!-- Modal for Adding Tasks -->
         <div
-            id="g_id_onload"
-            data-client_id="YOUR_CLIENT_ID.apps.googleusercontent.com"
-            data-callback="handleCredentialResponse"
-            data-auto_prompt="false"
-        ></div>
-        <div class="g_id_signin" data-type="standard"></div>
+            class="modal fade"
+            id="addTaskModal"
+            tabindex="-1"
+            aria-labelledby="addTaskModalLabel"
+            aria-hidden="true"
+        >
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="addTaskModalLabel">
+                            New Task
+                        </h5>
+                        <button
+                            type="button"
+                            class="btn-close"
+                            data-bs-dismiss="modal"
+                            aria-label="Close"
+                        ></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <input
+                                type="text"
+                                id="new-task-input"
+                                class="form-control"
+                                placeholder="Task description"
+                                aria-label="Task description"
+                                aria-describedby="taskHelp"
+                            />
+                            <small id="taskHelp" class="form-text text-muted">
+                                Enter a brief description for your task.
+                            </small>
+                        </div>
+                        <div class="form-check form-switch mb-3">
+                            <input
+                                class="form-check-input"
+                                type="checkbox"
+                                id="deadline-switch"
+                                aria-label="Toggle deadline input"
+                            />
+                            <label
+                                class="form-check-label"
+                                for="deadline-switch"
+                            >
+                                Set Deadline
+                            </label>
+                        </div>
+                        <div class="mb-3 d-none" id="deadline-container">
+                            <label for="task-deadline-date" class="form-label"
+                                >Deadline Date</label
+                            >
+                            <input
+                                type="date"
+                                id="task-deadline-date"
+                                class="form-control"
+                                aria-label="Task deadline date"
+                            />
 
-        <!-- JavaScript to handle the response -->
-        <script>
-            function handleCredentialResponse(response) {
-                console.log("Encoded JWT ID token: " + response.credential);
+                            <label
+                                for="task-deadline-time"
+                                class="form-label mt-3"
+                                >Deadline Time</label
+                            >
+                            <input
+                                type="time"
+                                id="task-deadline-time"
+                                class="form-control"
+                                aria-label="Task deadline time"
+                            />
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button
+                            type="button"
+                            class="btn btn-secondary"
+                            data-bs-dismiss="modal"
+                        >
+                            Close
+                        </button>
+                        <button
+                            type="button"
+                            class="btn btn-primary"
+                            id="save-task-btn"
+                            aria-label="Save new task"
+                        >
+                            Save Task
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-                // Decode the JWT token for user info
-                const user = parseJwt(response.credential);
-                console.log("User Info:", user);
+        <!-- Bootstrap JS -->
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-                // Display the user's name (optional)
-                const welcomeMessage = document.createElement("p");
-                welcomeMessage.textContent = `Welcome, ${user.name}!`;
-                document.body.appendChild(welcomeMessage);
-            }
-
-            // Helper function to decode JWT
-            function parseJwt(token) {
-                const base64Url = token.split(".")[1];
-                const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-                const jsonPayload = decodeURIComponent(
-                    atob(base64)
-                        .split("")
-                        .map(
-                            (c) =>
-                                `%${("00" + c.charCodeAt(0).toString(16)).slice(-2)}`,
-                        )
-                        .join(""),
-                );
-                return JSON.parse(jsonPayload);
-            }
-        </script>
+        <!-- Your custom script -->
+        <script src="script.js"></script>
     </body>
 </html>

@@ -1,0 +1,15 @@
+{
+    "name": "To-Do List",
+    "short_name": "To-Do",
+    "start_url": "https://todo-a82af.web.app/",
+    "display": "standalone",
+    "background_color": "#f4f4f4",
+    "theme_color": "#28a745",
+    "icons": [
+        {
+            "src": "/to-do-list.png",
+            "type": "image/png",
+            "sizes": "512x512"
+        }
+    ]
+}
