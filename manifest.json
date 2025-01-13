@@ -1,7 +1,7 @@
 {
     "name": "To-Do List",
     "short_name": "To-Do",
-    "start_url": "https://todo-a82af.web.app/",
+    "start_url": "url",
     "display": "standalone",
     "background_color": "#f4f4f4",
     "theme_color": "#28a745",

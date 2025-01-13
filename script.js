@@ -1,11 +1,8 @@
-/////////////////////////////////////////////////////////
-// 1) Firebase Configuration
-/////////////////////////////////////////////////////////
+// Firebase Configuration
 const firebaseConfig = {
-    //paste config
+    //
 };
 
-// Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 
 const db = firebase.firestore();
@@ -22,27 +19,25 @@ db.enablePersistence().catch((err) => {
     }
 });
 
+// Register Service Worker
 if ("serviceWorker" in navigator) {
-    window.addEventListener("load", function () {
+    window.addEventListener("load", () => {
         navigator.serviceWorker.register("/sw.js").then(
-            function (registration) {
+            (registration) => {
                 console.log(
-                    "ServiceWorker registration successful with scope: ",
+                    "ServiceWorker registration successful with scope:",
                     registration.scope,
                 );
             },
-            function (err) {
-                console.log("ServiceWorker registration failed: ", err);
+            (err) => {
+                console.log("ServiceWorker registration failed:", err);
             },
         );
     });
 }
 
-/*************************************************
- *  2) DOM Elements & Global Variables
- *************************************************/
 document.addEventListener("DOMContentLoaded", function () {
-    // Auth
+    // DOM Elements
     const signInBtn = document.getElementById("sign-in-btn");
     const signUpBtn = document.getElementById("sign-up-btn");
     const signOutBtn = document.getElementById("sign-out-btn");
@@ -50,26 +45,38 @@ document.addEventListener("DOMContentLoaded", function () {
     const passwordInput = document.getElementById("password-input");
     const authSection = document.getElementById("auth-section");
     const todoSection = document.getElementById("todo-section");
-    // Feedback & loading
     const feedbackContainer = document.getElementById("feedback-container");
     const loadingSpinner = document.getElementById("loading-spinner");
-    // Tasks
     const newTaskInput = document.getElementById("new-task-input");
-    const taskDeadlineDate = document.getElementById("task-deadline-date");
-    const taskDeadlineTime = document.getElementById("task-deadline-time");
+    const taskDeadlineInput = document.getElementById("task-deadline");
     const saveTaskBtn = document.getElementById("save-task-btn");
     const taskList = document.getElementById("task-list");
-    // Theme
+    const completedTaskList = document.getElementById("completed-task-list");
     const themeToggleBtn = document.getElementById("theme-toggle-btn");
     const deadlineSwitch = document.getElementById("deadline-switch");
     const deadlineContainer = document.getElementById("deadline-container");
 
     let tasks = [];
     let tasksDocRef = null;
+    let unsubscribeSnapshot = null;
 
-    /*************************************************
-     *  3) Local Storage for Tasks
-     *************************************************/
+    // Initialize Flatpickr and keep a reference
+    const fp = flatpickr(taskDeadlineInput, {
+        enableTime: true,
+        dateFormat: "Y-m-d H:i",
+        allowInput: true,
+    });
+
+    // Debounce utility for future use (e.g., search functionality)
+    function debounce(func, wait) {
+        let timeout;
+        return function (...args) {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(this, args), wait);
+        };
+    }
+
+    // Load and save tasks to localStorage
     function loadTasksFromCache() {
         const cachedTasks = localStorage.getItem("tasks");
         if (cachedTasks) {
@@ -81,9 +88,31 @@ document.addEventListener("DOMContentLoaded", function () {
         localStorage.setItem("tasks", JSON.stringify(tasks));
     }
 
-    /*************************************************
-     *  4) Authentication
-     *************************************************/
+    // Feedback function
+    function showFeedback(message, type) {
+        const alertDiv = document.createElement("div");
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+        alertDiv.role = "alert";
+        alertDiv.textContent = message;
+
+        const closeBtn = document.createElement("button");
+        closeBtn.type = "button";
+        closeBtn.className = "btn-close";
+        closeBtn.setAttribute("data-bs-dismiss", "alert");
+        closeBtn.setAttribute("aria-label", "Close");
+        alertDiv.appendChild(closeBtn);
+
+        feedbackContainer.appendChild(alertDiv);
+
+        setTimeout(() => {
+            if (alertDiv) {
+                alertDiv.classList.remove("show");
+                alertDiv.classList.add("hide");
+            }
+        }, 3000);
+    }
+
+    // Authentication
     signUpBtn.addEventListener("click", async () => {
         const email = emailInput.value.trim();
         const password = passwordInput.value;
@@ -118,7 +147,6 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     });
 
-    // Auth state listener
     auth.onAuthStateChanged((user) => {
         if (user) {
             authSection.classList.add("d-none");
@@ -127,11 +155,10 @@ document.addEventListener("DOMContentLoaded", function () {
                 .collection("users")
                 .doc(user.uid)
                 .collection("tasks");
-            // Load from local storage
             loadTasksFromCache();
-            // Then load from Firestore
-            loadTasksFromFirestore();
+            initSnapshotListener();
         } else {
+            if (unsubscribeSnapshot) unsubscribeSnapshot();
             authSection.classList.remove("d-none");
             todoSection.classList.add("d-none");
             tasks = [];
@@ -139,100 +166,60 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     });
 
-    /*************************************************
-     *  5) Firestore Load & Save
-     *************************************************/
-    async function loadTasksFromFirestore() {
+    // Initialize Firestore real-time updates via onSnapshot
+    function initSnapshotListener() {
         if (!tasksDocRef) return;
         loadingSpinner.classList.remove("d-none");
-        try {
-            const querySnapshot = await tasksDocRef
-                .orderBy("addedDate", "desc")
-                .limit(50)
-                .get();
-            tasks = querySnapshot.docs.map((doc) => ({
-                id: doc.id,
-                ...doc.data(),
-            }));
-            saveTasksToCache();
-            renderTasks();
-        } catch (error) {
-            console.error("Error loading tasks:", error);
-            showFeedback("Error loading tasks.", "danger");
-        } finally {
-            loadingSpinner.classList.add("d-none");
-        }
+        unsubscribeSnapshot = tasksDocRef
+            .orderBy("addedDate", "desc")
+            .limit(50)
+            .onSnapshot(
+                (snapshot) => {
+                    tasks = snapshot.docs.map((doc) => ({
+                        id: doc.id,
+                        ...doc.data(),
+                    }));
+                    saveTasksToCache();
+                    renderTasks();
+                    loadingSpinner.classList.add("d-none");
+                },
+                (error) => {
+                    console.error("Error loading tasks:", error);
+                    showFeedback("Error loading tasks.", "danger");
+                    loadingSpinner.classList.add("d-none");
+                },
+            );
     }
 
-    async function saveTasksToFirestore() {
-        if (!tasksDocRef) return;
-
-        // 1) Get existing docs
-        const existingDocs = await tasksDocRef.get();
-        // 2) Create a batch
-        const batch = db.batch();
-        // 3) Convert local tasks to map
-        const localTasksMap = new Map();
-        tasks.forEach((task) => {
-            if (!task.id) {
-                task.id = tasksDocRef.doc().id;
-            }
-            localTasksMap.set(task.id, task);
-        });
-        // 4) For any doc in Firestore not in localTasksMap, delete it
-        existingDocs.forEach((doc) => {
-            if (!localTasksMap.has(doc.id)) {
-                batch.delete(tasksDocRef.doc(doc.id));
-            }
-        });
-        // 5) Upsert each local task
-        tasks.forEach((task) => {
-            const docRef = tasksDocRef.doc(task.id);
-            batch.set(docRef, task);
-        });
-        // 6) Commit
-        try {
-            await batch.commit();
-            showFeedback("Tasks synced with Firestore!", "success");
-        } catch (error) {
-            console.error("Error syncing tasks:", error);
-            showFeedback("Error syncing tasks.", "danger");
-        }
-    }
-
-    /*************************************************
-     *  6) Rendering & Grouping
-     *************************************************/
     function renderTasks() {
+        // Separate tasks into incomplete and completed arrays
+        const incompleteTasks = tasks.filter((task) => !task.completed);
+        const completedTasks = tasks.filter((task) => task.completed);
+
+        // Clear existing lists using DocumentFragment for performance
+        const fragIncomplete = document.createDocumentFragment();
+        const fragCompleted = document.createDocumentFragment();
+
         taskList.innerHTML = "";
+        completedTaskList.innerHTML = "";
 
-        // Group tasks by local date
-        const groupedTasks = groupTasksByDate(tasks);
-
-        // Sort date keys descending
+        // Group and render incomplete tasks
+        const groupedTasks = groupTasksByDate(incompleteTasks);
         const sortedDates = Object.keys(groupedTasks).sort(
             (a, b) => new Date(b) - new Date(a),
         );
 
-        // Render each group
         sortedDates.forEach((dateStr) => {
-            // Sub-heading for this date
             const dateHeading = document.createElement("li");
             dateHeading.className = "list-group-item bg-light fw-bold";
-            dateHeading.textContent = dateStr; // e.g. 1/14/2025
-            taskList.appendChild(dateHeading);
+            dateHeading.textContent = dateStr;
+            fragIncomplete.appendChild(dateHeading);
 
             groupedTasks[dateStr].forEach((taskObj) => {
                 const li = document.createElement("li");
                 li.className =
                     "list-group-item d-flex justify-content-between align-items-center";
 
-                // Mark as completed
-                if (taskObj.completed) {
-                    li.classList.add("completed");
-                }
-
-                // Highlight incomplete tasks older than today
                 const taskDate = new Date(taskObj.addedDate);
                 const today = new Date();
                 const dateOnly = new Date(
@@ -246,7 +233,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     today.getDate(),
                 );
                 if (!taskObj.completed && dateOnly < todayOnly) {
-                    li.classList.add("bg-warning-incomplete");
+                    li.classList.add("incomplete-old");
                 }
 
                 const localDateTimeString = taskDate.toLocaleString();
@@ -255,30 +242,58 @@ document.addEventListener("DOMContentLoaded", function () {
                     : "No deadline";
 
                 li.innerHTML = `
-              <div>
-                <strong>${taskObj.text}</strong><br>
-                <small>Added on: ${localDateTimeString}</small><br>
-                <small>Deadline: ${formattedDeadline}</small>
-              </div>
-              <div>
-                <button class="btn btn-sm btn-danger" onclick="deleteTask('${taskObj.id}')">
-                  Delete
-                </button>
-                <button class="btn btn-sm btn-primary" onclick="toggleTask('${taskObj.id}')">
-                  ${taskObj.completed ? "Undo" : "Complete"}
-                </button>
-              </div>
-            `;
+          <div>
+            <strong>${taskObj.text}</strong><br>
+            <small>Added on: ${localDateTimeString}</small><br>
+            <small>Deadline: ${formattedDeadline}</small>
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-sm btn-danger" onclick="deleteTask('${taskObj.id}')">Delete</button>
+            <button class="btn btn-sm btn-primary" onclick="toggleTask('${taskObj.id}')">
+              ${taskObj.completed ? "Undo" : "Complete"}
+            </button>
+          </div>
+        `;
 
-                taskList.appendChild(li);
+                fragIncomplete.appendChild(li);
             });
         });
 
-        // Update progress bar
+        // Render completed tasks in collapsible list
+        completedTasks.forEach((taskObj) => {
+            const li = document.createElement("li");
+            li.className =
+                "list-group-item d-flex justify-content-between align-items-center completed";
+
+            const taskDate = new Date(taskObj.addedDate);
+            const localDateTimeString = taskDate.toLocaleString();
+            const formattedDeadline = taskObj.deadline
+                ? new Date(taskObj.deadline).toLocaleString()
+                : "No deadline";
+
+            li.innerHTML = `
+        <div>
+          <strong>${taskObj.text}</strong><br>
+          <small>Added on: ${localDateTimeString}</small><br>
+          <small>Deadline: ${formattedDeadline}</small>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-sm btn-danger" onclick="deleteTask('${taskObj.id}')">Delete</button>
+          <button class="btn btn-sm btn-primary" onclick="toggleTask('${taskObj.id}')">
+            Undo
+          </button>
+        </div>
+      `;
+
+            fragCompleted.appendChild(li);
+        });
+
+        taskList.appendChild(fragIncomplete);
+        completedTaskList.appendChild(fragCompleted);
+
         updateProgressBar();
     }
 
-    // Group tasks by local date string
     function groupTasksByDate(tasksArray) {
         const groups = {};
         tasksArray.forEach((t) => {
@@ -292,7 +307,6 @@ document.addEventListener("DOMContentLoaded", function () {
         return groups;
     }
 
-    // Progress bar
     function updateProgressBar() {
         const progressBar = document.getElementById("task-progress-bar");
         const completedCount = tasks.filter((t) => t.completed).length;
@@ -307,23 +321,14 @@ document.addEventListener("DOMContentLoaded", function () {
         progressBar.textContent = `${completedCount} / ${totalCount} (${percent}%)`;
     }
 
-    /*************************************************
-     *  7) Task Operations (Add, Delete, Toggle)
-     *************************************************/
-    // Add new task
     function addTask() {
         const taskText = newTaskInput.value.trim();
         if (taskText === "") return;
 
-        // Combine date + time for the deadline
         let deadlineValue = null;
-        const dateVal = taskDeadlineDate.value.trim();
-        const timeVal = taskDeadlineTime.value.trim();
-        if (dateVal && timeVal) {
-            deadlineValue = new Date(`${dateVal}T${timeVal}`).toISOString();
-        } else if (dateVal) {
-            // If only date is provided, default to midnight
-            deadlineValue = new Date(dateVal).toISOString();
+        const deadlineVal = taskDeadlineInput.value.trim();
+        if (deadlineVal) {
+            deadlineValue = new Date(deadlineVal).toISOString();
         }
 
         const addedDate = new Date().toISOString();
@@ -334,100 +339,87 @@ document.addEventListener("DOMContentLoaded", function () {
             completed: false,
         };
 
-        tasks.push(newTask);
-        saveTasksToCache();
-        saveTasksToFirestore();
-        renderTasks();
+        tasksDocRef
+            .add(newTask)
+            .then(() => {
+                showFeedback("Task added successfully!", "success");
+            })
+            .catch((error) => {
+                console.error("Error adding task:", error);
+                showFeedback(error.message, "danger");
+            });
 
-        // Clear form
         newTaskInput.value = "";
-        taskDeadlineDate.value = "";
-        taskDeadlineTime.value = "";
+        taskDeadlineInput.value = "";
 
-        // Hide the modal
         const addTaskModal = document.getElementById("addTaskModal");
         const modal = bootstrap.Modal.getInstance(addTaskModal);
         modal.hide();
     }
 
-    // Delete a task
     window.deleteTask = function (taskId) {
-        tasks = tasks.filter((t) => t.id !== taskId);
-        saveTasksToCache();
-        saveTasksToFirestore();
-        renderTasks();
+        tasksDocRef
+            .doc(taskId)
+            .delete()
+            .then(() => {
+                showFeedback("Task deleted successfully!", "info");
+            })
+            .catch((error) => {
+                console.error("Delete Error:", error);
+                showFeedback(error.message, "danger");
+            });
     };
 
-    // Toggle a task’s completion
     window.toggleTask = function (taskId) {
         const task = tasks.find((t) => t.id === taskId);
         if (task) {
-            task.completed = !task.completed;
+            tasksDocRef
+                .doc(taskId)
+                .update({ completed: !task.completed })
+                .then(() => {
+                    showFeedback("Task updated successfully!", "success");
+                })
+                .catch((error) => {
+                    console.error("Update Error:", error);
+                    showFeedback(error.message, "danger");
+                });
         }
-        saveTasksToCache();
-        saveTasksToFirestore();
-        renderTasks();
     };
 
-    // Save button
     saveTaskBtn.addEventListener("click", addTask);
 
-    // Deadline Switch
     deadlineSwitch.addEventListener("change", () => {
         if (deadlineSwitch.checked) {
             deadlineContainer.classList.remove("d-none");
+            // Set default date to today at 9:00 PM
+            const now = new Date();
+            now.setHours(21, 0, 0, 0);
+            fp.setDate(now, true);
         } else {
             deadlineContainer.classList.add("d-none");
-            taskDeadlineDate.value = "";
-            taskDeadlineTime.value = "";
+            taskDeadlineInput.value = "";
         }
     });
 
-    /*************************************************
-     *  8) Theme Toggle with Persistence
-     *************************************************/
+    // Theme Management
     function loadTheme() {
         const savedTheme = localStorage.getItem("theme");
         if (savedTheme === "dark") {
             document.body.classList.add("dark");
-            themeToggleBtn.textContent = "Light Mode";
+            themeToggleBtn.textContent = "☀️ Light Mode";
         } else {
             document.body.classList.remove("dark");
-            themeToggleBtn.textContent = "Dark Mode";
+            themeToggleBtn.textContent = "🌙 Dark Mode";
         }
     }
 
     themeToggleBtn.addEventListener("click", () => {
         const isDarkMode = document.body.classList.toggle("dark");
         localStorage.setItem("theme", isDarkMode ? "dark" : "light");
-        themeToggleBtn.textContent = isDarkMode ? "Light Mode" : "Dark Mode";
+        themeToggleBtn.textContent = isDarkMode
+            ? "☀️ Light Mode"
+            : "🌙 Dark Mode";
     });
 
-    loadTheme(); // Apply theme on page load
-
-    /*************************************************
-     *  9) Feedback Alerts
-     *************************************************/
-    function showFeedback(message, type) {
-        const alertDiv = document.createElement("div");
-        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
-        alertDiv.role = "alert";
-        alertDiv.textContent = message;
-
-        const closeBtn = document.createElement("button");
-        closeBtn.type = "button";
-        closeBtn.className = "btn-close";
-        closeBtn.setAttribute("data-bs-dismiss", "alert");
-        closeBtn.setAttribute("aria-label", "Close");
-        alertDiv.appendChild(closeBtn);
-        feedbackContainer.appendChild(alertDiv);
-
-        // Auto-hide the alert after 3 seconds
-        setTimeout(() => {
-            if (alertDiv) {
-                alertDiv.classList.remove("show");
-                alertDiv.classList.add("hide");
-            }
-        }, 3000);
-    }
+    loadTheme();
 });

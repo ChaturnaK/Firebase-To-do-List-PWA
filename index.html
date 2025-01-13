@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>To-Do App</title>
+        <title>Minimalist To-Do App</title>
 
         <!-- Bootstrap CSS -->
         <link
@@ -11,18 +11,24 @@
             rel="stylesheet"
         />
 
-        <!-- Your custom CSS -->
+        <!-- Flatpickr CSS -->
+        <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css"
+        />
+
+        <!-- Custom CSS -->
         <link rel="stylesheet" href="styles.css" />
         <link rel="manifest" href="manifest.json" />
 
-        <!-- Firebase (compat libraries for example) -->
+        <!-- Firebase (compat libraries) -->
         <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
         <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
         <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     </head>
     <body>
         <!-- Navbar -->
-        <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
             <div class="container">
                 <a class="navbar-brand" href="#">To-Do App</a>
                 <button
@@ -30,7 +36,7 @@
                     class="btn btn-outline-light ms-auto"
                     aria-label="Switch theme mode"
                 >
-                    Dark Mode
+                    🌙 Dark Mode
                 </button>
             </div>
         </nav>
@@ -40,16 +46,16 @@
 
         <!-- Loading Spinner -->
         <div id="loading-spinner" class="d-none text-center my-3">
-            <div class="spinner-border" role="status">
+            <div class="spinner-border text-primary" role="status">
                 <span class="visually-hidden">Loading...</span>
             </div>
             <p>Loading...</p>
         </div>
 
         <!-- Authentication Section -->
-        <div class="container mt-5" id="auth-section">
+        <section class="container mt-5" id="auth-section">
             <div class="row justify-content-center">
-                <div class="col-md-6">
+                <div class="col-sm-12 col-md-6 bg-light p-4 rounded shadow-sm">
                     <h2 class="text-center mb-4">Sign In or Sign Up</h2>
                     <div class="mb-3">
                         <input
@@ -79,11 +85,10 @@
                     </div>
                 </div>
             </div>
-        </div>
+        </section>
 
         <!-- To-Do Section -->
-        <div class="container mt-5 d-none" id="todo-section">
-            <!-- Section Heading & Buttons -->
+        <section class="container mt-5 d-none" id="todo-section">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2>Your Tasks</h2>
                 <div>
@@ -105,7 +110,7 @@
                 </div>
             </div>
 
-            <!-- Progress Bar for Completed vs. Total Tasks -->
+            <!-- Progress Bar -->
             <div class="mb-4">
                 <label class="fw-bold mb-1">Progress:</label>
                 <div class="progress">
@@ -123,11 +128,30 @@
                 </div>
             </div>
 
-            <!-- Task List (grouped by date) -->
+            <!-- Task List -->
             <ul class="list-group" id="task-list">
-                <!-- Date headings and tasks will be inserted dynamically here -->
+                <!-- Dynamically inserted tasks will be here -->
             </ul>
-        </div>
+
+            <!-- Collapsible Completed Tasks Section -->
+            <div class="mt-4">
+                <button
+                    class="btn btn-secondary"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#completedTasks"
+                    aria-expanded="false"
+                    aria-controls="completedTasks"
+                >
+                    Show Completed Tasks
+                </button>
+                <div class="collapse mt-2" id="completedTasks">
+                    <ul class="list-group" id="completed-task-list">
+                        <!-- Completed tasks will be rendered here -->
+                    </ul>
+                </div>
+            </div>
+        </section>
 
         <!-- Modal for Adding Tasks -->
         <div
@@ -137,8 +161,10 @@
             aria-labelledby="addTaskModalLabel"
             aria-hidden="true"
         >
-            <div class="modal-dialog">
-                <div class="modal-content">
+            <div
+                class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down"
+            >
+                <div class="modal-content shadow-sm">
                     <div class="modal-header">
                         <h5 class="modal-title" id="addTaskModalLabel">
                             New Task
@@ -160,9 +186,9 @@
                                 aria-label="Task description"
                                 aria-describedby="taskHelp"
                             />
-                            <small id="taskHelp" class="form-text text-muted">
-                                Enter a brief description for your task.
-                            </small>
+                            <small id="taskHelp" class="form-text text-muted"
+                                >Enter a brief description for your task.</small
+                            >
                         </div>
                         <div class="form-check form-switch mb-3">
                             <input
@@ -174,31 +200,19 @@
                             <label
                                 class="form-check-label"
                                 for="deadline-switch"
+                                >Set Deadline</label
                             >
-                                Set Deadline
-                            </label>
                         </div>
                         <div class="mb-3 d-none" id="deadline-container">
-                            <label for="task-deadline-date" class="form-label"
-                                >Deadline Date</label
+                            <label for="task-deadline" class="form-label"
+                                >Deadline</label
                             >
                             <input
-                                type="date"
-                                id="task-deadline-date"
+                                type="text"
+                                id="task-deadline"
                                 class="form-control"
-                                aria-label="Task deadline date"
-                            />
-
-                            <label
-                                for="task-deadline-time"
-                                class="form-label mt-3"
-                                >Deadline Time</label
-                            >
-                            <input
-                                type="time"
-                                id="task-deadline-time"
-                                class="form-control"
-                                aria-label="Task deadline time"
+                                placeholder="Select deadline"
+                                aria-label="Task deadline"
                             />
                         </div>
                     </div>
@@ -223,10 +237,11 @@
             </div>
         </div>
 
-        <!-- Bootstrap JS -->
+        <!-- Bootstrap JS & Flatpickr JS -->
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
-        <!-- Your custom script -->
+        <!-- Custom JS -->
         <script src="script.js"></script>
     </body>
 </html>
