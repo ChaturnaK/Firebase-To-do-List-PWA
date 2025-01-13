@@ -1,53 +1,81 @@
-# To-Do List Application with Local Storage
 
-A simple and responsive to-do list application built using HTML, CSS, and JavaScript. This application uses the browser's local storage to save tasks, ensuring that the to-do list remains persistent even after the page is refreshed.
+#  Firebase To-Do App
+
+A responsive, minimalist To-Do application built with HTML, CSS, JavaScript, Bootstrap, Flatpickr, and Firebase. This app supports light/dark themes, real-time updates, and a clean user interface optimized for both desktop and mobile devices.
 
 ## Features
 
-- Add new tasks
-- Delete tasks
-- Mark tasks as complete or incomplete
-- Tasks persist across page reloads using local storage
-- Responsive design for both desktop and mobile screens
+- **User Authentication:** Sign up, sign in, and sign out functionality using Firebase Authentication.
+- **Real-Time Sync:** Tasks are synchronized with Firebase Firestore in real-time.
+- **Responsive Design:** Fully responsive layout using Bootstrap to support desktops, tablets, and phones.
+- **Minimalist Themes:** Clean light and dark mode themes with a focus on readability and usability.
+- **Task Management:** 
+  - Add, delete, and complete tasks.
+  - Set deadlines using an integrated date and time picker (Flatpickr).
+  - Flashing red gradient for overdue tasks to draw attention.
+  - Collapsible list for completed tasks to keep the interface uncluttered.
+- **Offline Persistence:** Local caching of tasks with Firebase offline persistence.
+- **Performance Improvements:** 
+  - Efficient DOM updates using `DocumentFragment`.
+  - Real-time Firestore listeners (`onSnapshot`) for smooth data handling.
+  - Debounced inputs for future optimizations.
 
 ## Technologies Used
 
-- **HTML**: Structure of the application
-- **CSS**: For styling the to-do list and making it responsive
-- **JavaScript**: Application logic for managing tasks and storing data in local storage
+- **Frontend:** HTML5, CSS3 (with CSS variables and media queries), JavaScript (ES6+)
+- **Libraries & Frameworks:**
+  - [Bootstrap 5](https://getbootstrap.com/) for responsive UI components.
+  - [Flatpickr](https://flatpickr.js.org/) for a modern date and time picker.
+  - [Firebase](https://firebase.google.com/) for backend services (Authentication, Firestore, Service Workers).
+- **Version Control:** Git, with the repository hosted on GitHub.
 
-## How to Run
+## Setup & Installation
 
-1. Clone the repository to your local machine:
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/ChaturnaK/Firebase-To-do-List-PWA.git
+   cd Firebase-To-do-List-PWA
+   ```
 
-    ```bash
-    git clone https://github.com/your-username/To-Do-list-Offline-.git
-    ```
-
-2. Navigate into the project directory:
-
-    ```bash
-    cd To-Do-list-Offline-
-    ```
-
-3. Open the `todo.html` file in your web browser:
-
-    - You can double-click the `todo.html` file in your project directory.
-    - Alternatively, you can run a local server by using tools like `Live Server` in Visual Studio Code or other methods.
+2. **Configure Firebase:**
+   - Create a Firebase project at [Firebase Console](https://console.firebase.google.com/).
+   - Enable Authentication (Email/Password) and Firestore.
+   - Copy your Firebase configuration and replace the placeholder in `script.js`:
+     ```javascript
+     const firebaseConfig = {
+       // Paste your Firebase config here
+     };
+     ```
+   
+3. **Run the application:**
+   - Simply open `index.html` in your browser or host it using a local development server.
 
 ## Usage
 
-- Type a task into the input field and click the "Add Task" button (or press Enter) to add it to the list.
-- To mark a task as complete, click the "Complete" button. This will strike through the task and change its background color.
-- To revert a completed task back to incomplete, click the "Undo" button.
-- To delete a task, click the "Delete" button.
-- All tasks are saved in the browser's local storage, so they will be available even if the page is refreshed or the browser is closed.
+- **Sign Up / Sign In:** Create an account or log in with existing credentials.
+- **Add a Task:** Click the "Add New Task" button, fill in the details, set a deadline if needed, and save.
+- **Manage Tasks:** 
+  - Mark tasks as complete/incomplete.
+  - Delete tasks.
+  - Expand the "Show Completed Tasks" section to view completed tasks.
+- **Toggle Theme:** Use the dark mode toggle button in the navbar to switch between light and dark themes. The theme preference is saved and persists across sessions.
 
-## File Structure
+## Responsiveness
 
-```plaintext
-To-Do-list-Offline-/
-│
-├── todo.html        # The main HTML file that contains the structure of the application
-├── styles.css        # The CSS file for styling the application
-└── script.js         # The JavaScript file containing logic for adding, deleting, and completing tasks
+- The layout adapts to various screen sizes using Bootstrap’s grid system.
+- On small devices, the modal for adding tasks becomes fullscreen for ease of use.
+- Media queries adjust font sizes and button paddings on smaller screens to enhance readability.
+
+## Contributing
+
+Contributions are welcome! Feel free to fork this repository, make improvements, and submit pull requests. Please ensure that your code adheres to the project's style and guidelines.
+
+## License
+
+This project is open-source and available under the [MIT License](LICENSE).
+
+## Acknowledgments
+
+- [Bootstrap](https://getbootstrap.com/) for responsive UI components.
+- [Flatpickr](https://flatpickr.js.org/) for the date and time picker.
+- [Firebase](https://firebase.google.com/) for backend services and real-time data synchronization.
