@@ -1,247 +1,183 @@
 <!doctype html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Minimalist To-Do App</title>
 
-        <!-- Bootstrap CSS -->
-        <link
-            href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-            rel="stylesheet"
-        />
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Minimalist To-Do App</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" />
+    <!-- Flatpickr CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="manifest" href="manifest.json" />
+    <!-- Firebase (compat libraries) -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+</head>
 
-        <!-- Flatpickr CSS -->
-        <link
-            rel="stylesheet"
-            href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css"
-        />
-
-        <!-- Custom CSS -->
-        <link rel="stylesheet" href="styles.css" />
-        <link rel="manifest" href="manifest.json" />
-
-        <!-- Firebase (compat libraries) -->
-        <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-        <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-        <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    </head>
-    <body>
-        <!-- Navbar -->
-        <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
-            <div class="container">
-                <a class="navbar-brand" href="#">To-Do App</a>
-                <button
-                    id="theme-toggle-btn"
-                    class="btn btn-outline-light ms-auto"
-                    aria-label="Switch theme mode"
-                >
-                    🌙 Dark Mode
-                </button>
-            </div>
-        </nav>
-
-        <!-- Feedback Alerts -->
-        <div class="container mt-3" id="feedback-container"></div>
-
-        <!-- Loading Spinner -->
-        <div id="loading-spinner" class="d-none text-center my-3">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Loading...</span>
-            </div>
-            <p>Loading...</p>
-        </div>
-
-        <!-- Authentication Section -->
-        <section class="container mt-5" id="auth-section">
-            <div class="row justify-content-center">
-                <div class="col-sm-12 col-md-6 bg-light p-4 rounded shadow-sm">
-                    <h2 class="text-center mb-4">Sign In or Sign Up</h2>
-                    <div class="mb-3">
-                        <input
-                            type="email"
-                            id="email-input"
-                            class="form-control"
-                            placeholder="Email"
-                            aria-label="Email address"
-                        />
-                    </div>
-                    <div class="mb-3">
-                        <input
-                            type="password"
-                            id="password-input"
-                            class="form-control"
-                            placeholder="Password"
-                            aria-label="Password"
-                        />
-                    </div>
-                    <div class="d-flex justify-content-center">
-                        <button id="sign-in-btn" class="btn btn-primary me-2">
-                            Sign In
-                        </button>
-                        <button id="sign-up-btn" class="btn btn-secondary">
-                            Sign Up
-                        </button>
-                    </div>
+<body>
+    <!-- Authentication Modal -->
+    <div class="modal fade" id="authModal" tabindex="-1" aria-labelledby="authModalLabel" aria-hidden="true"
+        data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="authModalLabel">Welcome to To-Do App</h5>
                 </div>
-            </div>
-        </section>
-
-        <!-- To-Do Section -->
-        <section class="container mt-5 d-none" id="todo-section">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2>Your Tasks</h2>
-                <div>
-                    <button
-                        type="button"
-                        class="btn btn-success"
-                        data-bs-toggle="modal"
-                        data-bs-target="#addTaskModal"
-                    >
-                        Add New Task
-                    </button>
-                    <button
-                        id="sign-out-btn"
-                        class="btn btn-outline-danger ms-2"
-                        aria-label="Sign out"
-                    >
-                        Sign Out
-                    </button>
-                </div>
-            </div>
-
-            <!-- Progress Bar -->
-            <div class="mb-4">
-                <label class="fw-bold mb-1">Progress:</label>
-                <div class="progress">
-                    <div
-                        id="task-progress-bar"
-                        class="progress-bar"
-                        role="progressbar"
-                        style="width: 0%"
-                        aria-valuenow="0"
-                        aria-valuemin="0"
-                        aria-valuemax="100"
-                    >
-                        0%
-                    </div>
-                </div>
-            </div>
-
-            <!-- Task List -->
-            <ul class="list-group" id="task-list">
-                <!-- Dynamically inserted tasks will be here -->
-            </ul>
-
-            <!-- Collapsible Completed Tasks Section -->
-            <div class="mt-4">
-                <button
-                    class="btn btn-secondary"
-                    type="button"
-                    data-bs-toggle="collapse"
-                    data-bs-target="#completedTasks"
-                    aria-expanded="false"
-                    aria-controls="completedTasks"
-                >
-                    Show Completed Tasks
-                </button>
-                <div class="collapse mt-2" id="completedTasks">
-                    <ul class="list-group" id="completed-task-list">
-                        <!-- Completed tasks will be rendered here -->
-                    </ul>
-                </div>
-            </div>
-        </section>
-
-        <!-- Modal for Adding Tasks -->
-        <div
-            class="modal fade"
-            id="addTaskModal"
-            tabindex="-1"
-            aria-labelledby="addTaskModalLabel"
-            aria-hidden="true"
-        >
-            <div
-                class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down"
-            >
-                <div class="modal-content shadow-sm">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="addTaskModalLabel">
-                            New Task
-                        </h5>
-                        <button
-                            type="button"
-                            class="btn-close"
-                            data-bs-dismiss="modal"
-                            aria-label="Close"
-                        ></button>
-                    </div>
-                    <div class="modal-body">
+                <div class="modal-body">
+                    <!-- Login Form -->
+                    <form id="login-form" class="auth-form">
+                        <h6 class="mb-3">Sign In</h6>
                         <div class="mb-3">
-                            <input
-                                type="text"
-                                id="new-task-input"
-                                class="form-control"
-                                placeholder="Task description"
-                                aria-label="Task description"
-                                aria-describedby="taskHelp"
-                            />
-                            <small id="taskHelp" class="form-text text-muted"
-                                >Enter a brief description for your task.</small
-                            >
+                            <label for="login-email" class="form-label">Email</label>
+                            <input type="email" id="login-email" class="form-control" placeholder="Enter your email"
+                                required />
                         </div>
-                        <div class="form-check form-switch mb-3">
-                            <input
-                                class="form-check-input"
-                                type="checkbox"
-                                id="deadline-switch"
-                                aria-label="Toggle deadline input"
-                            />
-                            <label
-                                class="form-check-label"
-                                for="deadline-switch"
-                                >Set Deadline</label
-                            >
+                        <div class="mb-3">
+                            <label for="login-password" class="form-label">Password</label>
+                            <input type="password" id="login-password" class="form-control"
+                                placeholder="Enter your password" required />
                         </div>
-                        <div class="mb-3 d-none" id="deadline-container">
-                            <label for="task-deadline" class="form-label"
-                                >Deadline</label
-                            >
-                            <input
-                                type="text"
-                                id="task-deadline"
-                                class="form-control"
-                                placeholder="Select deadline"
-                                aria-label="Task deadline"
-                            />
+                        <button type="submit" class="btn btn-primary w-100 mb-3">Sign In</button>
+                        <div class="text-center">
+                            <small class="text-muted">Don't have an account? <a href="#" id="show-signup">Sign
+                                    up</a></small>
                         </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button
-                            type="button"
-                            class="btn btn-secondary"
-                            data-bs-dismiss="modal"
-                        >
-                            Close
-                        </button>
-                        <button
-                            type="button"
-                            class="btn btn-primary"
-                            id="save-task-btn"
-                            aria-label="Save new task"
-                        >
-                            Save Task
-                        </button>
-                    </div>
+                    </form>
+
+                    <!-- Signup Form -->
+                    <form id="signup-form" class="auth-form" style="display: none;">
+                        <h6 class="mb-3">Create Account</h6>
+                        <div class="mb-3">
+                            <label for="signup-email" class="form-label">Email</label>
+                            <input type="email" id="signup-email" class="form-control" placeholder="Enter your email"
+                                required />
+                        </div>
+                        <div class="mb-3">
+                            <label for="signup-password" class="form-label">Password</label>
+                            <input type="password" id="signup-password" class="form-control"
+                                placeholder="Enter your password" required />
+                        </div>
+                        <div class="mb-3">
+                            <label for="signup-confirm-password" class="form-label">Confirm Password</label>
+                            <input type="password" id="signup-confirm-password" class="form-control"
+                                placeholder="Confirm your password" required />
+                        </div>
+                        <button type="submit" class="btn btn-success w-100 mb-3">Create Account</button>
+                        <div class="text-center">
+                            <small class="text-muted">Already have an account? <a href="#" id="show-login">Sign
+                                    in</a></small>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- Bootstrap JS & Flatpickr JS -->
-        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <!-- Top Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark px-3" id="top-navbar" style="display: none;">
+        <a class="navbar-brand fw-bold" href="#">To-Do</a>
+        <div class="ms-auto d-flex align-items-center gap-2">
+            <button id="theme-toggle-btn" class="btn btn-outline-light me-2" aria-label="Switch theme mode">
+                <i class="bi bi-moon"></i>
+            </button>
+            <div class="dropdown">
+                <button class="btn btn-outline-light d-flex align-items-center gap-2" id="userDropdown"
+                    data-bs-toggle="dropdown" aria-expanded="false">
+                    <span id="user-avatar" class="avatar-circle bg-primary text-white">?</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                    <li><span class="dropdown-item-text" id="sidebar-user-email">User</span></li>
+                    <li>
+                        <hr class="dropdown-divider">
+                    </li>
+                    <li><button id="sign-out-btn" class="dropdown-item text-danger" type="button"><i
+                                class="bi bi-box-arrow-right me-2"></i>Sign out</button></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
 
-        <!-- Custom JS -->
-        <script src="script.js"></script>
-    </body>
+    <div class="app-container" style="display: none !important;">
+        <!-- Main Content -->
+        <main class="main-content p-4">
+            <!-- Progress & Filters -->
+            <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-4 gap-3">
+                <div class="w-100">
+                    <label class="fw-bold mb-1">Progress:</label>
+                    <div class="progress">
+                        <div id="task-progress-bar" class="progress-bar" role="progressbar" style="width: 0%"
+                            aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                    </div>
+                </div>
+                <div class="filter-chips d-flex gap-2 mt-2 mt-md-0">
+                    <button class="btn btn-sm btn-outline-primary active" data-filter="all">All</button>
+                    <button class="btn btn-sm btn-outline-primary" data-filter="active">Active</button>
+                    <button class="btn btn-sm btn-outline-primary" data-filter="completed">Completed</button>
+                    <button class="btn btn-sm btn-outline-primary" data-filter="overdue">Overdue</button>
+                </div>
+            </div>
+            <!-- Task List -->
+            <div id="task-list" class="task-list">
+                <!-- Task cards will be rendered here -->
+            </div>
+            <!-- Snackbar for undo -->
+            <div id="snackbar" class="snackbar"></div>
+        </main>
+        <!-- Floating Action Button -->
+        <button id="fab-add-task" class="fab btn btn-success" aria-label="Add new task">
+            <i class="bi bi-plus-lg"></i>
+        </button>
+    </div>
+    <!-- Modal for Add/Edit Task -->
+    <div class="modal fade" id="taskModal" tabindex="-1" aria-labelledby="taskModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="taskModalLabel">New Task</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="task-form">
+                        <div class="mb-3">
+                            <label for="task-text" class="form-label">Task</label>
+                            <input type="text" id="task-text" class="form-control" placeholder="Task description"
+                                required />
+                        </div>
+                        <div class="mb-3">
+                            <label for="task-deadline" class="form-label">Deadline</label>
+                            <input type="text" id="task-deadline" class="form-control" placeholder="Select deadline" />
+                        </div>
+                        <div class="mb-3">
+                            <label for="task-priority" class="form-label">Priority</label>
+                            <select id="task-priority" class="form-select">
+                                <option value="normal" selected>Normal</option>
+                                <option value="high">High</option>
+                                <option value="low">Low</option>
+                            </select>
+                        </div>
+                        <input type="hidden" id="task-id" />
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" form="task-form" class="btn btn-primary" id="save-task-btn">Save Task</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Bootstrap JS & Flatpickr JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <!-- Firebase config (DO NOT COMMIT REAL ONE TO GIT) -->
+    <script src="firebaseConfig.js"></script>
+    <!-- Custom JS -->
+    <script src="script.js"></script>
+</body>
+
 </html>

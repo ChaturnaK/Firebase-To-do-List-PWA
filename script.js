@@ -1,33 +1,23 @@
-// Firebase Configuration
-const firebaseConfig = {
-    //
-};
+// --- Modern To-Do App UI Overhaul ---
+// Firebase config is loaded globally from firebaseConfig.js
 
-firebase.initializeApp(firebaseConfig);
-
+firebase.initializeApp(window.firebaseConfig);
 const db = firebase.firestore();
 const auth = firebase.auth();
 
-// Enable offline persistence
 db.enablePersistence().catch((err) => {
     if (err.code === "failed-precondition") {
-        console.warn(
-            "Multiple tabs open. Persistence can only be enabled in one tab.",
-        );
+        console.warn("Multiple tabs open. Persistence can only be enabled in one tab.");
     } else if (err.code === "unimplemented") {
         console.warn("Offline persistence is not supported in this browser.");
     }
 });
 
-// Register Service Worker
 if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
         navigator.serviceWorker.register("/sw.js").then(
             (registration) => {
-                console.log(
-                    "ServiceWorker registration successful with scope:",
-                    registration.scope,
-                );
+                console.log("ServiceWorker registration successful with scope:", registration.scope);
             },
             (err) => {
                 console.log("ServiceWorker registration failed:", err);
@@ -37,389 +27,330 @@ if ("serviceWorker" in navigator) {
 }
 
 document.addEventListener("DOMContentLoaded", function () {
-    // DOM Elements
-    const signInBtn = document.getElementById("sign-in-btn");
-    const signUpBtn = document.getElementById("sign-up-btn");
-    const signOutBtn = document.getElementById("sign-out-btn");
-    const emailInput = document.getElementById("email-input");
-    const passwordInput = document.getElementById("password-input");
-    const authSection = document.getElementById("auth-section");
-    const todoSection = document.getElementById("todo-section");
-    const feedbackContainer = document.getElementById("feedback-container");
-    const loadingSpinner = document.getElementById("loading-spinner");
-    const newTaskInput = document.getElementById("new-task-input");
-    const taskDeadlineInput = document.getElementById("task-deadline");
-    const saveTaskBtn = document.getElementById("save-task-btn");
-    const taskList = document.getElementById("task-list");
-    const completedTaskList = document.getElementById("completed-task-list");
+    // --- DOM Elements ---
+    const appContainer = document.querySelector(".app-container");
+    const topNavbar = document.getElementById("top-navbar");
+    const authModal = new bootstrap.Modal(document.getElementById("authModal"));
+    const loginForm = document.getElementById("login-form");
+    const signupForm = document.getElementById("signup-form");
+    const showSignupLink = document.getElementById("show-signup");
+    const showLoginLink = document.getElementById("show-login");
+
+    const userEmailElem = document.getElementById("sidebar-user-email");
+    const userAvatar = document.getElementById("user-avatar");
     const themeToggleBtn = document.getElementById("theme-toggle-btn");
-    const deadlineSwitch = document.getElementById("deadline-switch");
-    const deadlineContainer = document.getElementById("deadline-container");
+    const signOutBtn = document.getElementById("sign-out-btn");
+    const fabAddTask = document.getElementById("fab-add-task");
+    const taskList = document.getElementById("task-list");
+    const progressBar = document.getElementById("task-progress-bar");
+    const filterChips = document.querySelectorAll(".filter-chips .btn");
+    const snackbar = document.getElementById("snackbar");
+    // Modal & Form
+    const taskModal = new bootstrap.Modal(document.getElementById("taskModal"));
+    const taskForm = document.getElementById("task-form");
+    const taskTextInput = document.getElementById("task-text");
+    const taskDeadlineInput = document.getElementById("task-deadline");
+    const taskPriorityInput = document.getElementById("task-priority");
+    const taskIdInput = document.getElementById("task-id");
 
     let tasks = [];
     let tasksDocRef = null;
     let unsubscribeSnapshot = null;
+    let currentFilter = "active";
+    let lastDeletedTask = null;
+    let lastDeletedTaskId = null;
 
-    // Initialize Flatpickr and keep a reference
+    // Flatpickr for deadline
     const fp = flatpickr(taskDeadlineInput, {
         enableTime: true,
         dateFormat: "Y-m-d H:i",
         allowInput: true,
     });
 
-    // Debounce utility for future use (e.g., search functionality)
-    function debounce(func, wait) {
-        let timeout;
-        return function (...args) {
-            clearTimeout(timeout);
-            timeout = setTimeout(() => func.apply(this, args), wait);
-        };
-    }
-
-    // Load and save tasks to localStorage
-    function loadTasksFromCache() {
-        const cachedTasks = localStorage.getItem("tasks");
-        if (cachedTasks) {
-            tasks = JSON.parse(cachedTasks);
-        }
-    }
-
-    function saveTasksToCache() {
-        localStorage.setItem("tasks", JSON.stringify(tasks));
-    }
-
-    // Feedback function
-    function showFeedback(message, type) {
-        const alertDiv = document.createElement("div");
-        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
-        alertDiv.role = "alert";
-        alertDiv.textContent = message;
-
-        const closeBtn = document.createElement("button");
-        closeBtn.type = "button";
-        closeBtn.className = "btn-close";
-        closeBtn.setAttribute("data-bs-dismiss", "alert");
-        closeBtn.setAttribute("aria-label", "Close");
-        alertDiv.appendChild(closeBtn);
-
-        feedbackContainer.appendChild(alertDiv);
-
-        setTimeout(() => {
-            if (alertDiv) {
-                alertDiv.classList.remove("show");
-                alertDiv.classList.add("hide");
-            }
-        }, 3000);
-    }
-
-    // Authentication
-    signUpBtn.addEventListener("click", async () => {
-        const email = emailInput.value.trim();
-        const password = passwordInput.value;
-        try {
-            await auth.createUserWithEmailAndPassword(email, password);
-            showFeedback("Signed up successfully!", "success");
-        } catch (error) {
-            console.error("Sign Up Error:", error);
-            showFeedback(error.message, "danger");
-        }
+    // --- Authentication Modal Logic ---
+    showSignupLink.addEventListener("click", (e) => {
+        e.preventDefault();
+        loginForm.style.display = "none";
+        signupForm.style.display = "block";
     });
 
-    signInBtn.addEventListener("click", async () => {
-        const email = emailInput.value.trim();
-        const password = passwordInput.value;
+    showLoginLink.addEventListener("click", (e) => {
+        e.preventDefault();
+        signupForm.style.display = "none";
+        loginForm.style.display = "block";
+    });
+
+    // Login form submission
+    loginForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const email = document.getElementById("login-email").value;
+        const password = document.getElementById("login-password").value;
+
         try {
             await auth.signInWithEmailAndPassword(email, password);
-            showFeedback("Signed in successfully!", "success");
+            showSnackbar("Signed in successfully!");
         } catch (error) {
-            console.error("Sign In Error:", error);
-            showFeedback(error.message, "danger");
+            showSnackbar(error.message, true);
         }
     });
 
-    signOutBtn.addEventListener("click", async () => {
+    // Signup form submission
+    signupForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const email = document.getElementById("signup-email").value;
+        const password = document.getElementById("signup-password").value;
+        const confirmPassword = document.getElementById("signup-confirm-password").value;
+
+        if (password !== confirmPassword) {
+            showSnackbar("Passwords do not match!", true);
+            return;
+        }
+
         try {
-            await auth.signOut();
-            showFeedback("Signed out successfully!", "info");
+            await auth.createUserWithEmailAndPassword(email, password);
+            showSnackbar("Account created successfully!");
         } catch (error) {
-            console.error("Sign Out Error:", error);
-            showFeedback(error.message, "danger");
+            showSnackbar(error.message, true);
         }
     });
 
+    // --- Auth State ---
     auth.onAuthStateChanged((user) => {
         if (user) {
-            authSection.classList.add("d-none");
-            todoSection.classList.remove("d-none");
-            tasksDocRef = db
-                .collection("users")
-                .doc(user.uid)
-                .collection("tasks");
-            loadTasksFromCache();
+            // User is signed in
+            authModal.hide();
+            appContainer.style.display = "block";
+            topNavbar.style.display = "flex";
+            userEmailElem.textContent = user.email;
+            userAvatar.textContent = user.email ? user.email[0].toUpperCase() : "?";
+            tasksDocRef = db.collection("users").doc(user.uid).collection("tasks");
             initSnapshotListener();
         } else {
+            // User is signed out
+            appContainer.style.display = "none";
+            topNavbar.style.display = "none";
+            authModal.show();
+            userEmailElem.textContent = "Not signed in";
+            userAvatar.textContent = "?";
             if (unsubscribeSnapshot) unsubscribeSnapshot();
-            authSection.classList.remove("d-none");
-            todoSection.classList.add("d-none");
             tasks = [];
             renderTasks();
         }
     });
 
-    // Initialize Firestore real-time updates via onSnapshot
-    function initSnapshotListener() {
-        if (!tasksDocRef) return;
-        loadingSpinner.classList.remove("d-none");
-        unsubscribeSnapshot = tasksDocRef
-            .orderBy("addedDate", "desc")
-            .limit(50)
-            .onSnapshot(
-                (snapshot) => {
-                    tasks = snapshot.docs.map((doc) => ({
-                        id: doc.id,
-                        ...doc.data(),
-                    }));
-                    saveTasksToCache();
-                    renderTasks();
-                    loadingSpinner.classList.add("d-none");
-                },
-                (error) => {
-                    console.error("Error loading tasks:", error);
-                    showFeedback("Error loading tasks.", "danger");
-                    loadingSpinner.classList.add("d-none");
-                },
-            );
+    // --- Sign Out ---
+    signOutBtn.addEventListener("click", async () => {
+        try {
+            await auth.signOut();
+            showSnackbar("Signed out.");
+        } catch (error) {
+            showSnackbar(error.message, true);
+        }
+    });
+
+    // --- Theme Toggle ---
+    function loadTheme() {
+        const savedTheme = localStorage.getItem("theme");
+        if (savedTheme === "dark") {
+            document.body.classList.add("dark");
+            themeToggleBtn.innerHTML = '<i class="bi bi-sun"></i>';
+        } else {
+            document.body.classList.remove("dark");
+            themeToggleBtn.innerHTML = '<i class="bi bi-moon"></i>';
+        }
+    }
+    themeToggleBtn.addEventListener("click", () => {
+        const isDark = document.body.classList.toggle("dark");
+        localStorage.setItem("theme", isDark ? "dark" : "light");
+        themeToggleBtn.innerHTML = isDark ? '<i class="bi bi-sun"></i>' : '<i class="bi bi-moon"></i>';
+    });
+    loadTheme();
+
+    // --- Floating Action Button: Add Task ---
+    fabAddTask.addEventListener("click", () => {
+        openTaskModal();
+    });
+
+    // --- Filter Chips ---
+    filterChips.forEach((chip) => {
+        chip.addEventListener("click", () => {
+            filterChips.forEach((c) => c.classList.remove("active"));
+            chip.classList.add("active");
+            currentFilter = chip.getAttribute("data-filter");
+            renderTasks();
+        });
+    });
+
+    // --- Modal: Add/Edit Task ---
+    function openTaskModal(task = null) {
+        if (task) {
+            taskTextInput.value = task.text;
+            taskDeadlineInput.value = task.deadline ? new Date(task.deadline).toLocaleString("sv-SE").replace("T", " ").slice(0, 16) : "";
+            taskPriorityInput.value = task.priority || "normal";
+            taskIdInput.value = task.id;
+            document.getElementById("taskModalLabel").textContent = "Edit Task";
+        } else {
+            taskTextInput.value = "";
+            taskDeadlineInput.value = "";
+            taskPriorityInput.value = "normal";
+            taskIdInput.value = "";
+            document.getElementById("taskModalLabel").textContent = "New Task";
+        }
+        fp.setDate(taskDeadlineInput.value || null, true);
+        setTimeout(() => taskTextInput.focus(), 300);
+        taskModal.show();
     }
 
-    function renderTasks() {
-        // Separate tasks into incomplete and completed arrays
-        const incompleteTasks = tasks.filter((task) => !task.completed);
-        const completedTasks = tasks.filter((task) => task.completed);
+    // --- Save Task (Add/Edit) ---
+    taskForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const text = taskTextInput.value.trim();
+        const deadlineVal = taskDeadlineInput.value.trim();
+        const deadline = deadlineVal ? new Date(deadlineVal).toISOString() : null;
+        const priority = taskPriorityInput.value;
+        const id = taskIdInput.value;
+        if (!text) return;
+        const now = new Date().toISOString();
+        if (id) {
+            // Edit
+            tasksDocRef.doc(id).update({ text, deadline, priority }).then(() => {
+                showSnackbar("Task updated.");
+                taskModal.hide();
+            }).catch((err) => showSnackbar(err.message, true));
+        } else {
+            // Add
+            const newTask = { text, addedDate: now, deadline, completed: false, priority };
+            tasksDocRef.add(newTask).then(() => {
+                showSnackbar("Task added.");
+                taskModal.hide();
+            }).catch((err) => showSnackbar(err.message, true));
+        }
+    });
 
-        // Clear existing lists using DocumentFragment for performance
-        const fragIncomplete = document.createDocumentFragment();
-        const fragCompleted = document.createDocumentFragment();
-
-        taskList.innerHTML = "";
-        completedTaskList.innerHTML = "";
-
-        // Group and render incomplete tasks
-        const groupedTasks = groupTasksByDate(incompleteTasks);
-        const sortedDates = Object.keys(groupedTasks).sort(
-            (a, b) => new Date(b) - new Date(a),
+    // --- Firestore Real-time Updates ---
+    function initSnapshotListener() {
+        if (!tasksDocRef) return;
+        if (unsubscribeSnapshot) unsubscribeSnapshot();
+        unsubscribeSnapshot = tasksDocRef.orderBy("addedDate", "desc").limit(100).onSnapshot(
+            (snapshot) => {
+                tasks = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+                renderTasks();
+            },
+            (error) => {
+                showSnackbar("Error loading tasks.", true);
+            }
         );
+    }
 
-        sortedDates.forEach((dateStr) => {
-            const dateHeading = document.createElement("li");
-            dateHeading.className = "list-group-item bg-light fw-bold";
-            dateHeading.textContent = dateStr;
-            fragIncomplete.appendChild(dateHeading);
-
-            groupedTasks[dateStr].forEach((taskObj) => {
-                const li = document.createElement("li");
-                li.className =
-                    "list-group-item d-flex justify-content-between align-items-center";
-
-                const taskDate = new Date(taskObj.addedDate);
-                const today = new Date();
-                const dateOnly = new Date(
-                    taskDate.getFullYear(),
-                    taskDate.getMonth(),
-                    taskDate.getDate(),
-                );
-                const todayOnly = new Date(
-                    today.getFullYear(),
-                    today.getMonth(),
-                    today.getDate(),
-                );
-                if (!taskObj.completed && dateOnly < todayOnly) {
-                    li.classList.add("incomplete-old");
+    // --- Render Tasks as Cards (List View) ---
+    function renderTasks() {
+        taskList.innerHTML = "";
+        let filtered = tasks;
+        const now = new Date();
+        if (currentFilter === "active") {
+            filtered = tasks.filter((t) => !t.completed);
+        } else if (currentFilter === "completed") {
+            filtered = tasks.filter((t) => t.completed);
+        } else if (currentFilter === "overdue") {
+            filtered = tasks.filter((t) => !t.completed && t.deadline && new Date(t.deadline) < now);
+        }
+        if (filtered.length === 0) {
+            taskList.innerHTML = '<div class="text-center text-muted py-5">No tasks found.</div>';
+        } else {
+            filtered.forEach((task) => {
+                const card = document.createElement("div");
+                card.className = "task-card d-flex flex-row align-items-center justify-content-between px-4 py-3" + (task.completed ? " completed" : "");
+                card.style.marginBottom = "1rem";
+                // Priority badge
+                const priority = `<span class=\"task-priority ${task.priority || 'normal'}\">${(task.priority || 'normal').charAt(0).toUpperCase() + (task.priority || 'normal').slice(1)}</span>`;
+                // Deadline
+                let deadline = "<span class='text-muted'>No deadline</span>";
+                if (task.deadline) {
+                    const d = new Date(task.deadline);
+                    deadline = `<span class='${!task.completed && d < now ? 'text-danger fw-bold' : 'text-muted'}'>${d.toLocaleString()}</span>`;
                 }
-
-                const localDateTimeString = taskDate.toLocaleString();
-                const formattedDeadline = taskObj.deadline
-                    ? new Date(taskObj.deadline).toLocaleString()
-                    : "No deadline";
-
-                li.innerHTML = `
-          <div>
-            <strong>${taskObj.text}</strong><br>
-            <small>Added on: ${localDateTimeString}</small><br>
-            <small>Deadline: ${formattedDeadline}</small>
-          </div>
-          <div class="btn-group">
-            <button class="btn btn-sm btn-danger" onclick="deleteTask('${taskObj.id}')">Delete</button>
-            <button class="btn btn-sm btn-primary" onclick="toggleTask('${taskObj.id}')">
-              ${taskObj.completed ? "Undo" : "Complete"}
-            </button>
-          </div>
-        `;
-
-                fragIncomplete.appendChild(li);
+                // Card inner HTML (improved layout)
+                card.innerHTML = `
+                  <div class=\"d-flex flex-column flex-md-row align-items-md-center gap-3 flex-grow-1\">
+                    <div class=\"d-flex align-items-center gap-2\">
+                      <span class=\"fw-bold task-title\">${task.text}</span>
+                      ${priority}
+                    </div>
+                    <div class=\"task-meta text-muted small d-flex flex-column flex-md-row gap-2\">
+                      <span><i class=\"bi bi-calendar-plus\"></i> ${new Date(task.addedDate).toLocaleString()}</span>
+                      <span><i class=\"bi bi-calendar-event\"></i> ${deadline}</span>
+                    </div>
+                  </div>
+                  <div class=\"task-actions d-flex gap-2 ms-3\">
+                    <button class=\"btn btn-sm btn-outline-primary\" title=\"Edit\" aria-label=\"Edit task\"><i class=\"bi bi-pencil\"></i></button>
+                    <button class=\"btn btn-sm btn-outline-success\" title=\"${task.completed ? 'Undo' : 'Complete'}\" aria-label=\"${task.completed ? 'Undo' : 'Complete'}\"><i class=\"bi ${task.completed ? 'bi-arrow-counterclockwise' : 'bi-check2-circle'}\"></i></button>
+                    <button class=\"btn btn-sm btn-outline-danger\" title=\"Delete\" aria-label=\"Delete task\"><i class=\"bi bi-trash\"></i></button>
+                  </div>
+                `;
+                // Action buttons
+                const [editBtn, completeBtn, deleteBtn] = card.querySelectorAll(".task-actions button");
+                editBtn.addEventListener("click", () => openTaskModal(task));
+                completeBtn.addEventListener("click", () => toggleTask(task.id, task.completed));
+                deleteBtn.addEventListener("click", () => deleteTask(task.id, task));
+                taskList.appendChild(card);
             });
-        });
-
-        // Render completed tasks in collapsible list
-        completedTasks.forEach((taskObj) => {
-            const li = document.createElement("li");
-            li.className =
-                "list-group-item d-flex justify-content-between align-items-center completed";
-
-            const taskDate = new Date(taskObj.addedDate);
-            const localDateTimeString = taskDate.toLocaleString();
-            const formattedDeadline = taskObj.deadline
-                ? new Date(taskObj.deadline).toLocaleString()
-                : "No deadline";
-
-            li.innerHTML = `
-        <div>
-          <strong>${taskObj.text}</strong><br>
-          <small>Added on: ${localDateTimeString}</small><br>
-          <small>Deadline: ${formattedDeadline}</small>
-        </div>
-        <div class="btn-group">
-          <button class="btn btn-sm btn-danger" onclick="deleteTask('${taskObj.id}')">Delete</button>
-          <button class="btn btn-sm btn-primary" onclick="toggleTask('${taskObj.id}')">
-            Undo
-          </button>
-        </div>
-      `;
-
-            fragCompleted.appendChild(li);
-        });
-
-        taskList.appendChild(fragIncomplete);
-        completedTaskList.appendChild(fragCompleted);
-
+        }
         updateProgressBar();
     }
 
-    function groupTasksByDate(tasksArray) {
-        const groups = {};
-        tasksArray.forEach((t) => {
-            const dateObj = new Date(t.addedDate);
-            const dateStr = dateObj.toLocaleDateString();
-            if (!groups[dateStr]) {
-                groups[dateStr] = [];
-            }
-            groups[dateStr].push(t);
-        });
-        return groups;
+    // --- Toggle Complete/Undo ---
+    function toggleTask(id, completed) {
+        tasksDocRef.doc(id).update({ completed: !completed }).then(() => {
+            showSnackbar(completed ? "Task marked as active." : "Task completed!");
+        }).catch((err) => showSnackbar(err.message, true));
     }
 
+    // --- Delete Task (with Undo) ---
+    function deleteTask(id, taskObj) {
+        lastDeletedTask = taskObj;
+        lastDeletedTaskId = id;
+        tasksDocRef.doc(id).delete().then(() => {
+            showSnackbar("Task deleted. <button class='btn btn-link btn-sm p-0 m-0' id='undo-btn'>Undo</button>", false, true);
+            setTimeout(() => {
+                const undoBtn = document.getElementById("undo-btn");
+                if (undoBtn) {
+                    undoBtn.onclick = undoDelete;
+                }
+            }, 100);
+        }).catch((err) => showSnackbar(err.message, true));
+    }
+    function undoDelete() {
+        if (lastDeletedTask && lastDeletedTaskId) {
+            const { id, ...taskData } = lastDeletedTask;
+            tasksDocRef.add(taskData).then(() => {
+                showSnackbar("Task restored.");
+                lastDeletedTask = null;
+                lastDeletedTaskId = null;
+            });
+        }
+    }
+
+    // --- Progress Bar ---
     function updateProgressBar() {
-        const progressBar = document.getElementById("task-progress-bar");
         const completedCount = tasks.filter((t) => t.completed).length;
         const totalCount = tasks.length;
-        const percent =
-            totalCount > 0
-                ? Math.round((completedCount / totalCount) * 100)
-                : 0;
-
+        const percent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
         progressBar.style.width = percent + "%";
         progressBar.setAttribute("aria-valuenow", percent);
         progressBar.textContent = `${completedCount} / ${totalCount} (${percent}%)`;
     }
 
-    function addTask() {
-        const taskText = newTaskInput.value.trim();
-        if (taskText === "") return;
-
-        let deadlineValue = null;
-        const deadlineVal = taskDeadlineInput.value.trim();
-        if (deadlineVal) {
-            deadlineValue = new Date(deadlineVal).toISOString();
-        }
-
-        const addedDate = new Date().toISOString();
-        const newTask = {
-            text: taskText,
-            addedDate,
-            deadline: deadlineValue,
-            completed: false,
-        };
-
-        tasksDocRef
-            .add(newTask)
-            .then(() => {
-                showFeedback("Task added successfully!", "success");
-            })
-            .catch((error) => {
-                console.error("Error adding task:", error);
-                showFeedback(error.message, "danger");
-            });
-
-        newTaskInput.value = "";
-        taskDeadlineInput.value = "";
-
-        const addTaskModal = document.getElementById("addTaskModal");
-        const modal = bootstrap.Modal.getInstance(addTaskModal);
-        modal.hide();
-    }
-
-    window.deleteTask = function (taskId) {
-        tasksDocRef
-            .doc(taskId)
-            .delete()
-            .then(() => {
-                showFeedback("Task deleted successfully!", "info");
-            })
-            .catch((error) => {
-                console.error("Delete Error:", error);
-                showFeedback(error.message, "danger");
-            });
-    };
-
-    window.toggleTask = function (taskId) {
-        const task = tasks.find((t) => t.id === taskId);
-        if (task) {
-            tasksDocRef
-                .doc(taskId)
-                .update({ completed: !task.completed })
-                .then(() => {
-                    showFeedback("Task updated successfully!", "success");
-                })
-                .catch((error) => {
-                    console.error("Update Error:", error);
-                    showFeedback(error.message, "danger");
-                });
-        }
-    };
-
-    saveTaskBtn.addEventListener("click", addTask);
-
-    deadlineSwitch.addEventListener("change", () => {
-        if (deadlineSwitch.checked) {
-            deadlineContainer.classList.remove("d-none");
-            // Set default date to today at 9:00 PM
-            const now = new Date();
-            now.setHours(21, 0, 0, 0);
-            fp.setDate(now, true);
+    // --- Snackbar ---
+    function showSnackbar(message, isError = false, html = false) {
+        snackbar.className = "snackbar show" + (isError ? " bg-danger text-white" : "");
+        if (html) {
+            snackbar.innerHTML = message;
         } else {
-            deadlineContainer.classList.add("d-none");
-            taskDeadlineInput.value = "";
+            snackbar.textContent = message;
         }
-    });
-
-    // Theme Management
-    function loadTheme() {
-        const savedTheme = localStorage.getItem("theme");
-        if (savedTheme === "dark") {
-            document.body.classList.add("dark");
-            themeToggleBtn.textContent = "☀️ Light Mode";
-        } else {
-            document.body.classList.remove("dark");
-            themeToggleBtn.textContent = "🌙 Dark Mode";
-        }
+        setTimeout(() => {
+            snackbar.className = "snackbar";
+            snackbar.innerHTML = "";
+        }, 3500);
     }
-
-    themeToggleBtn.addEventListener("click", () => {
-        const isDarkMode = document.body.classList.toggle("dark");
-        localStorage.setItem("theme", isDarkMode ? "dark" : "light");
-        themeToggleBtn.textContent = isDarkMode
-            ? "☀️ Light Mode"
-            : "🌙 Dark Mode";
-    });
-
-    loadTheme();
-});
+}); 
