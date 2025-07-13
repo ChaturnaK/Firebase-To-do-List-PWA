@@ -52,6 +52,11 @@ document.addEventListener("DOMContentLoaded", function () {
     const taskDeadlineInput = document.getElementById("task-deadline");
     const taskPriorityInput = document.getElementById("task-priority");
     const taskIdInput = document.getElementById("task-id");
+    // Subtasks modal elements
+    const subtasksSection = document.getElementById("subtasks-section");
+    const subtaskInput = document.getElementById("subtask-input");
+    const addSubtaskBtn = document.getElementById("add-subtask-btn");
+    const subtasksList = document.getElementById("subtasks-list");
 
     let tasks = [];
     let tasksDocRef = null;
@@ -59,6 +64,8 @@ document.addEventListener("DOMContentLoaded", function () {
     let currentFilter = "active";
     let lastDeletedTask = null;
     let lastDeletedTaskId = null;
+    // Track expanded tasks by id
+    let expandedTasks = new Set();
 
     // Flatpickr for deadline
     const fp = flatpickr(taskDeadlineInput, {
@@ -189,16 +196,94 @@ document.addEventListener("DOMContentLoaded", function () {
             taskPriorityInput.value = task.priority || "normal";
             taskIdInput.value = task.id;
             document.getElementById("taskModalLabel").textContent = "Edit Task";
+            // Set subtasks if present
+            window.currentSubtasks = Array.isArray(task.subtasks) ? [...task.subtasks] : [];
         } else {
             taskTextInput.value = "";
             taskDeadlineInput.value = "";
             taskPriorityInput.value = "normal";
             taskIdInput.value = "";
             document.getElementById("taskModalLabel").textContent = "New Task";
+            window.currentSubtasks = [];
         }
         fp.setDate(taskDeadlineInput.value || null, true);
         setTimeout(() => taskTextInput.focus(), 300);
+        renderSubtasksModal();
+        // TODO: Render subtasks UI in modal (next step)
         taskModal.show();
+    }
+
+    // --- Subtasks Modal Logic ---
+    function renderSubtasksModal() {
+        if (!subtasksList) return;
+        subtasksList.innerHTML = "";
+        // Sort: incomplete first, completed last
+        window.currentSubtasks = [
+            ...window.currentSubtasks.filter(st => !st.completed),
+            ...window.currentSubtasks.filter(st => st.completed)
+        ];
+        (window.currentSubtasks || []).forEach((subtask, idx) => {
+            const li = document.createElement("li");
+            li.className = "list-group-item d-flex align-items-center justify-content-between";
+            li.setAttribute("data-idx", idx);
+            li.innerHTML = `
+                <span class='drag-handle me-2' tabindex='0' aria-label='Drag to reorder' style='cursor: grab; font-size: 1.2em;'><i class="bi bi-list"></i></span>
+                <div class="form-check flex-grow-1">
+                    <input class="form-check-input" type="checkbox" id="subtask-check-${idx}" ${subtask.completed ? 'checked' : ''}>
+                    <label class="form-check-label ${subtask.completed ? 'text-decoration-line-through text-muted' : ''}" for="subtask-check-${idx}">
+                        ${subtask.text}
+                    </label>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-danger ms-2" title="Delete subtask" aria-label="Delete subtask"><i class="bi bi-trash"></i></button>
+            `;
+            // Prevent drag on checkbox/label
+            li.querySelector(".form-check-input").addEventListener("mousedown", e => e.stopPropagation());
+            li.querySelector(".form-check-label").addEventListener("mousedown", e => e.stopPropagation());
+            // Toggle complete
+            li.querySelector(".form-check-input").addEventListener("change", (e) => {
+                window.currentSubtasks[idx].completed = e.target.checked;
+                // Resort: incomplete first, completed last
+                window.currentSubtasks = [
+                    ...window.currentSubtasks.filter(st => !st.completed),
+                    ...window.currentSubtasks.filter(st => st.completed)
+                ];
+                renderSubtasksModal();
+            });
+            // Delete subtask
+            li.querySelector(".btn-outline-danger").addEventListener("click", () => {
+                window.currentSubtasks.splice(idx, 1);
+                renderSubtasksModal();
+            });
+            subtasksList.appendChild(li);
+        });
+        // Enable SortableJS with drag handle
+        if (window.subtasksSortable) window.subtasksSortable.destroy();
+        window.subtasksSortable = Sortable.create(subtasksList, {
+            animation: 150,
+            handle: '.drag-handle',
+            onEnd: function (evt) {
+                if (evt.oldIndex !== evt.newIndex) {
+                    const moved = window.currentSubtasks.splice(evt.oldIndex, 1)[0];
+                    window.currentSubtasks.splice(evt.newIndex, 0, moved);
+                    renderSubtasksModal();
+                }
+            }
+        });
+    }
+    if (addSubtaskBtn && subtaskInput) {
+        addSubtaskBtn.addEventListener("click", () => {
+            const text = subtaskInput.value.trim();
+            if (text) {
+                window.currentSubtasks.push({ text, completed: false });
+                subtaskInput.value = "";
+                renderSubtasksModal();
+            }
+        });
+        subtaskInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") {
+                addSubtaskBtn.click();
+            }
+        });
     }
 
     // --- Save Task (Add/Edit) ---
@@ -209,17 +294,20 @@ document.addEventListener("DOMContentLoaded", function () {
         const deadline = deadlineVal ? new Date(deadlineVal).toISOString() : null;
         const priority = taskPriorityInput.value;
         const id = taskIdInput.value;
+        const subtasks = Array.isArray(window.currentSubtasks) ? window.currentSubtasks : [];
+        // If all subtasks are completed, mark main task as completed
+        const completed = subtasks.length > 0 ? subtasks.every(st => st.completed) : false;
         if (!text) return;
         const now = new Date().toISOString();
         if (id) {
             // Edit
-            tasksDocRef.doc(id).update({ text, deadline, priority }).then(() => {
+            tasksDocRef.doc(id).update({ text, deadline, priority, subtasks, completed }).then(() => {
                 showSnackbar("Task updated.");
                 taskModal.hide();
             }).catch((err) => showSnackbar(err.message, true));
         } else {
             // Add
-            const newTask = { text, addedDate: now, deadline, completed: false, priority };
+            const newTask = { text, addedDate: now, deadline, completed, priority, subtasks };
             tasksDocRef.add(newTask).then(() => {
                 showSnackbar("Task added.");
                 taskModal.hide();
@@ -242,7 +330,229 @@ document.addEventListener("DOMContentLoaded", function () {
         );
     }
 
-    // --- Render Tasks as Cards (List View) ---
+    // --- Debounce utility ---
+    function debounce(fn, delay) {
+        let timer = null;
+        return function (...args) {
+            clearTimeout(timer);
+            timer = setTimeout(() => fn.apply(this, args), delay);
+        };
+    }
+    // --- Throttle utility ---
+    function throttle(fn, limit) {
+        let inThrottle;
+        return function (...args) {
+            if (!inThrottle) {
+                fn.apply(this, args);
+                inThrottle = true;
+                setTimeout(() => inThrottle = false, limit);
+            }
+        };
+    }
+    // --- Debounced Firestore update for subtasks ---
+    const debouncedUpdateSubtasks = debounce((taskId, subtasks, completed) => {
+        tasksDocRef.doc(taskId).update({ subtasks, completed });
+    }, 200);
+    // --- Render a single task card by id ---
+    function renderTaskCard(taskId) {
+        const task = tasks.find(t => t.id === taskId);
+        if (!task) return;
+        // Remove old card
+        const oldCard = document.querySelector(`[data-task-id='${taskId}']`);
+        if (oldCard) oldCard.remove();
+        // Render new card and insert in correct position
+        const card = createTaskCard(task);
+        // Insert in correct order
+        const allCards = Array.from(taskList.children);
+        let inserted = false;
+        for (let i = 0; i < allCards.length; i++) {
+            const otherId = allCards[i].getAttribute('data-task-id');
+            const otherTask = tasks.find(t => t.id === otherId);
+            if (otherTask && new Date(task.addedDate) > new Date(otherTask.addedDate)) {
+                taskList.insertBefore(card, allCards[i]);
+                inserted = true;
+                break;
+            }
+        }
+        if (!inserted) taskList.appendChild(card);
+    }
+    // --- Create a single task card (refactored from renderTasks) ---
+    function createTaskCard(task) {
+        const hasSubtasks = Array.isArray(task.subtasks) && task.subtasks.length > 0;
+        const isExpanded = expandedTasks.has(task.id);
+        const card = document.createElement("div");
+        card.className = "task-card d-flex flex-column px-4 py-3" + (task.completed ? " completed" : "");
+        card.style.marginBottom = "1rem";
+        card.setAttribute('data-task-id', task.id);
+        // Priority badge
+        const priority = `<span class=\"task-priority ${task.priority || 'normal'}\">${(task.priority || 'normal').charAt(0).toUpperCase() + (task.priority || 'normal').slice(1)}</span>`;
+        // Deadline
+        let deadline = "<span class='text-muted'>No deadline</span>";
+        if (task.deadline) {
+            const d = new Date(task.deadline);
+            deadline = `<span class='${!task.completed && d < now ? 'text-danger fw-bold' : 'text-muted'}'>${d.toLocaleString()}</span>`;
+        }
+        // Expand/collapse button
+        let expandBtn = "";
+        if (hasSubtasks) {
+            expandBtn = `<button class='btn btn-sm btn-outline-secondary me-2' title='${isExpanded ? "Collapse" : "Expand"} subtasks' data-taskid='${task.id}'><i class='bi bi-${isExpanded ? "dash" : "plus"}-square'></i></button>`;
+        }
+        // Card inner HTML
+        card.innerHTML = `
+          <div class=\"d-flex flex-row align-items-center justify-content-between w-100\">
+            <div class=\"d-flex align-items-center gap-3\">
+              ${expandBtn}
+              <span class=\"fw-bold task-title\">${task.text}</span>
+              ${priority}
+            </div>
+            <div class=\"task-meta text-muted small d-flex flex-column flex-md-row gap-2\">
+              <span><i class=\"bi bi-calendar-plus\"></i> ${new Date(task.addedDate).toLocaleString()}</span>
+              <span><i class=\"bi bi-calendar-event\"></i> ${deadline}</span>
+            </div>
+            <div class=\"task-actions d-flex gap-2 ms-3\">
+              <button class=\"btn btn-sm btn-outline-primary\" title=\"Edit\" aria-label=\"Edit task\"><i class=\"bi bi-pencil\"></i></button>
+              <button class=\"btn btn-sm btn-outline-success\" title=\"${task.completed ? 'Undo' : 'Complete'}\" aria-label=\"${task.completed ? 'Undo' : 'Complete'}\"><i class=\"bi ${task.completed ? 'bi-arrow-counterclockwise' : 'bi-check2-circle'}\"></i></button>
+              <button class=\"btn btn-sm btn-outline-danger\" title=\"Delete\" aria-label=\"Delete task\"><i class=\"bi bi-trash\"></i></button>
+            </div>
+          </div>
+          <div class='subtasks-tree' style='${isExpanded && hasSubtasks ? '' : 'display:none;'}'></div>
+          <div class='main-complete-lock-message' style='display:none; color:#dc3545; font-size:0.95em; margin-top:0.5em;'><i class="bi bi-lock-fill me-1"></i>Complete all subtasks to finish this task.</div>
+        `;
+        // Action buttons
+        const [editBtn, completeBtn, deleteBtn] = card.querySelectorAll(".task-actions button");
+        editBtn.addEventListener("click", () => openTaskModal(task));
+        completeBtn.addEventListener("click", () => toggleTask(task.id, task.completed));
+        deleteBtn.addEventListener("click", () => deleteTask(task.id, task));
+        // Expand/collapse logic
+        if (hasSubtasks) {
+            const expandBtnElem = card.querySelector("button[title*='subtasks']");
+            if (expandBtnElem) {
+                expandBtnElem.addEventListener("click", () => {
+                    if (expandedTasks.has(task.id)) {
+                        expandedTasks.delete(task.id);
+                    } else {
+                        expandedTasks.add(task.id);
+                    }
+                    renderTasks();
+                });
+            }
+        }
+        // Render subtasks tree if expanded
+        if (isExpanded && hasSubtasks) {
+            const subtasksDiv = card.querySelector('.subtasks-tree');
+            subtasksDiv.innerHTML = '';
+            const ul = document.createElement('ul');
+            ul.className = 'list-group list-group-flush';
+            // Sort: incomplete first, completed last
+            const sortedSubtasks = [
+                ...task.subtasks.filter(st => !st.completed),
+                ...task.subtasks.filter(st => st.completed)
+            ];
+            let dividerAdded = false;
+            sortedSubtasks.forEach((sub, idx) => {
+                // Divider for completed subtasks
+                if (!dividerAdded && idx > 0 && sortedSubtasks[idx - 1].completed === false && sub.completed === true) {
+                    const divider = document.createElement('li');
+                    divider.className = 'list-group-item py-1 px-2 bg-light text-center border-0';
+                    divider.style.fontSize = '0.9em';
+                    divider.style.background = '#f8f9fa';
+                    divider.innerHTML = '<span class="text-muted">Completed</span>';
+                    ul.appendChild(divider);
+                    dividerAdded = true;
+                }
+                const li = document.createElement('li');
+                li.className = 'list-group-item d-flex align-items-center';
+                li.setAttribute('data-idx', idx);
+                if (sub.completed) li.style.background = '#f8f9fa';
+                li.innerHTML = `
+                    <span class='drag-handle me-2' tabindex='0' aria-label='Drag to reorder' style='cursor: grab; font-size: 1.2em;'><i class="bi bi-list"></i></span>
+                    <input class='form-check-input me-2' type='checkbox' id='subtask-main-${task.id}-${idx}' ${sub.completed ? 'checked' : ''}>
+                    <label class='form-check-label flex-grow-1 ${sub.completed ? 'text-decoration-line-through text-muted' : ''}' for='subtask-main-${task.id}-${idx}'>${sub.text}</label>
+                `;
+                // Prevent drag on checkbox/label
+                li.querySelector('input[type="checkbox"]').addEventListener('mousedown', e => e.stopPropagation());
+                li.querySelector('label').addEventListener('mousedown', e => e.stopPropagation());
+                // Toggle subtask completion
+                li.querySelector('input[type="checkbox"]').addEventListener('change', (e) => {
+                    // Update in Firestore
+                    const updatedSubtasks = [...task.subtasks];
+                    // Find the real index in the original array
+                    const realIdx = task.subtasks.findIndex((s, i) => s.text === sub.text && s.completed === sub.completed && i >= idx);
+                    updatedSubtasks[realIdx] = { ...updatedSubtasks[realIdx], completed: e.target.checked };
+                    // Resort: incomplete first, completed last
+                    const resorted = [
+                        ...updatedSubtasks.filter(st => !st.completed),
+                        ...updatedSubtasks.filter(st => st.completed)
+                    ];
+                    // If all subtasks are completed, mark main task as completed; else, mark as active
+                    const allDone = resorted.length > 0 && resorted.every(st => st.completed);
+                    debouncedUpdateSubtasks(task.id, resorted, allDone);
+                });
+                ul.appendChild(li);
+            });
+            subtasksDiv.appendChild(ul);
+            // Enable SortableJS for main list subtasks with drag handle
+            const mainListSortable = Sortable.create(ul, {
+                animation: 150,
+                handle: '.drag-handle',
+                onEnd: function (evt) {
+                    if (evt.oldIndex !== evt.newIndex) {
+                        const updatedSubtasks = [...task.subtasks];
+                        // Only allow reordering within incomplete or completed sections
+                        const incompleteCount = updatedSubtasks.filter(st => !st.completed).length;
+                        const oldIsCompleted = sortedSubtasks[evt.oldIndex].completed;
+                        const newIsCompleted = sortedSubtasks[evt.newIndex].completed;
+                        // Prevent moving incomplete to completed section and vice versa
+                        if (oldIsCompleted !== newIsCompleted) {
+                            renderTasks(); // Revert the change
+                            return;
+                        }
+                        // Find the real indices in the original array
+                        const oldRealIdx = task.subtasks.findIndex((s, i) => s.text === sortedSubtasks[evt.oldIndex].text && s.completed === sortedSubtasks[evt.oldIndex].completed && i >= evt.oldIndex);
+                        const newRealIdx = task.subtasks.findIndex((s, i) => s.text === sortedSubtasks[evt.newIndex].text && s.completed === sortedSubtasks[evt.newIndex].completed && i >= evt.newIndex);
+                        if (oldRealIdx !== -1 && newRealIdx !== -1) {
+                            const moved = updatedSubtasks.splice(oldRealIdx, 1)[0];
+                            updatedSubtasks.splice(newRealIdx, 0, moved);
+                            // Resort to maintain completed at bottom
+                            const resorted = [
+                                ...updatedSubtasks.filter(st => !st.completed),
+                                ...updatedSubtasks.filter(st => st.completed)
+                            ];
+                            debouncedUpdateSubtasks(task.id, resorted, resorted.length > 0 && resorted.every(st => st.completed));
+                        }
+                    }
+                }
+            });
+        }
+        // Disable main task completion if there are incomplete subtasks
+        const incompleteSubtasks = hasSubtasks ? task.subtasks.filter(st => !st.completed).length : 0;
+        const lockMsg = card.querySelector('.main-complete-lock-message');
+        if (hasSubtasks && incompleteSubtasks > 0) {
+            completeBtn.disabled = true;
+            completeBtn.title = `Complete all ${incompleteSubtasks} subtask${incompleteSubtasks > 1 ? 's' : ''} first`;
+            completeBtn.classList.add('disabled');
+            if (lockMsg) lockMsg.style.display = 'block';
+        } else {
+            completeBtn.disabled = false;
+            completeBtn.title = task.completed ? 'Undo' : 'Complete';
+            completeBtn.classList.remove('disabled');
+            if (lockMsg) lockMsg.style.display = 'none';
+        }
+        // Accessibility: expand/collapse button
+        if (hasSubtasks) {
+            const expandBtnElem = card.querySelector("button[title*='subtasks']");
+            if (expandBtnElem) {
+                expandBtnElem.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+                expandBtnElem.setAttribute('aria-label', isExpanded ? 'Collapse subtasks' : 'Expand subtasks');
+                expandBtnElem.style.minWidth = '2.5em';
+                expandBtnElem.style.minHeight = '2.5em';
+                expandBtnElem.style.fontSize = '1.3em';
+                expandBtnElem.style.marginRight = '0.5em';
+            }
+        }
+        return card;
+    }
+    // --- Refactor renderTasks to use DocumentFragment and only re-render changed cards ---
     function renderTasks() {
         taskList.innerHTML = "";
         let filtered = tasks;
@@ -257,43 +567,11 @@ document.addEventListener("DOMContentLoaded", function () {
         if (filtered.length === 0) {
             taskList.innerHTML = '<div class="text-center text-muted py-5">No tasks found.</div>';
         } else {
+            const frag = document.createDocumentFragment();
             filtered.forEach((task) => {
-                const card = document.createElement("div");
-                card.className = "task-card d-flex flex-row align-items-center justify-content-between px-4 py-3" + (task.completed ? " completed" : "");
-                card.style.marginBottom = "1rem";
-                // Priority badge
-                const priority = `<span class=\"task-priority ${task.priority || 'normal'}\">${(task.priority || 'normal').charAt(0).toUpperCase() + (task.priority || 'normal').slice(1)}</span>`;
-                // Deadline
-                let deadline = "<span class='text-muted'>No deadline</span>";
-                if (task.deadline) {
-                    const d = new Date(task.deadline);
-                    deadline = `<span class='${!task.completed && d < now ? 'text-danger fw-bold' : 'text-muted'}'>${d.toLocaleString()}</span>`;
-                }
-                // Card inner HTML (improved layout)
-                card.innerHTML = `
-                  <div class=\"d-flex flex-column flex-md-row align-items-md-center gap-3 flex-grow-1\">
-                    <div class=\"d-flex align-items-center gap-2\">
-                      <span class=\"fw-bold task-title\">${task.text}</span>
-                      ${priority}
-                    </div>
-                    <div class=\"task-meta text-muted small d-flex flex-column flex-md-row gap-2\">
-                      <span><i class=\"bi bi-calendar-plus\"></i> ${new Date(task.addedDate).toLocaleString()}</span>
-                      <span><i class=\"bi bi-calendar-event\"></i> ${deadline}</span>
-                    </div>
-                  </div>
-                  <div class=\"task-actions d-flex gap-2 ms-3\">
-                    <button class=\"btn btn-sm btn-outline-primary\" title=\"Edit\" aria-label=\"Edit task\"><i class=\"bi bi-pencil\"></i></button>
-                    <button class=\"btn btn-sm btn-outline-success\" title=\"${task.completed ? 'Undo' : 'Complete'}\" aria-label=\"${task.completed ? 'Undo' : 'Complete'}\"><i class=\"bi ${task.completed ? 'bi-arrow-counterclockwise' : 'bi-check2-circle'}\"></i></button>
-                    <button class=\"btn btn-sm btn-outline-danger\" title=\"Delete\" aria-label=\"Delete task\"><i class=\"bi bi-trash\"></i></button>
-                  </div>
-                `;
-                // Action buttons
-                const [editBtn, completeBtn, deleteBtn] = card.querySelectorAll(".task-actions button");
-                editBtn.addEventListener("click", () => openTaskModal(task));
-                completeBtn.addEventListener("click", () => toggleTask(task.id, task.completed));
-                deleteBtn.addEventListener("click", () => deleteTask(task.id, task));
-                taskList.appendChild(card);
+                frag.appendChild(createTaskCard(task));
             });
+            taskList.appendChild(frag);
         }
         updateProgressBar();
     }

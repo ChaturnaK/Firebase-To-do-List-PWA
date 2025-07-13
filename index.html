@@ -18,6 +18,8 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <!-- SortableJS -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 </head>
 
 <body>
@@ -163,6 +165,15 @@
                         </div>
                         <input type="hidden" id="task-id" />
                     </form>
+                    <!-- Subtasks UI -->
+                    <div id="subtasks-section" class="mt-3">
+                        <label class="form-label">Subtasks</label>
+                        <div class="input-group mb-2">
+                            <input type="text" id="subtask-input" class="form-control" placeholder="Add a subtask..." />
+                            <button type="button" id="add-subtask-btn" class="btn btn-outline-secondary">Add</button>
+                        </div>
+                        <ul id="subtasks-list" class="list-group"></ul>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>

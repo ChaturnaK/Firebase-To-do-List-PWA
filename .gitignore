@@ -70,3 +70,4 @@ node_modules/
 
 # Firebase config file
 firebaseConfig.js
+firebaseConfig.example.js
