@@ -378,6 +378,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     // --- Create a single task card (refactored from renderTasks) ---
     function createTaskCard(task) {
+        const now = new Date();
         const hasSubtasks = Array.isArray(task.subtasks) && task.subtasks.length > 0;
         const isExpanded = expandedTasks.has(task.id);
         const card = document.createElement("div");
